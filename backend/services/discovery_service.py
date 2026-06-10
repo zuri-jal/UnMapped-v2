@@ -1,11 +1,14 @@
 import os
 import asyncio
 import httpx
+from dotenv import load_dotenv
 from utils.cache import get_cache, set_cache, cache_key
+
+load_dotenv()
 
 REDDIT_CLIENT_ID = os.getenv("REDDIT_CLIENT_ID")
 REDDIT_CLIENT_SECRET = os.getenv("REDDIT_CLIENT_SECRET")
-REDDIT_USER_AGENT = os.getenv("REDDIT_USER_AGENT", "unmapped:v1.0")
+REDDIT_USER_AGENT = "unmapped:v1.0"
 YOUTUBE_API_KEY = os.getenv("YOUTUBE_API_KEY")
 
 REDDIT_SUBREDDITS = ["travel", "solotravel", "backpacking", "shoestring"]

@@ -1,8 +1,5 @@
-import os
 import json
 from typing import Any, Optional
-
-REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
 
 _redis_client = None
 

@@ -1,5 +1,16 @@
 from pydantic import BaseModel, Field
 from typing import Optional, List
+from datetime import date
+
+
+class TripRequest(BaseModel):
+    destination: Optional[str] = Field(None, description="Explicit destination — overrides message if set")
+    departure_date: date
+    duration_days: int = Field(..., ge=1)
+    budget_usd: float = Field(..., ge=0)
+    travelers: int = Field(1, ge=1)
+    travel_style: str
+    user_message: str
 
 
 class PlanRequest(BaseModel):

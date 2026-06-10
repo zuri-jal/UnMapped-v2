@@ -1,5 +1,30 @@
 from pydantic import BaseModel
-from typing import Optional, List
+from typing import Any, Optional, List
+
+
+class DayItinerary(BaseModel):
+    day: int
+    date: str
+    location: str
+    morning: str
+    afternoon: str
+    evening: str
+
+
+class BudgetBreakdown(BaseModel):
+    flights: float
+    accommodation: float
+    food: float
+    transport: float
+    activities: float
+    total: float
+
+
+class TripResponse(BaseModel):
+    summary: str
+    days: List[DayItinerary]
+    budget_breakdown: BudgetBreakdown
+    discovery_insights: List[Any] = []
 
 
 class ActivityModel(BaseModel):

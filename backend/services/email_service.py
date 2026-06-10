@@ -1,5 +1,6 @@
 import os
 import base64
+from dotenv import load_dotenv
 from sendgrid import SendGridAPIClient
 from sendgrid.helpers.mail import (
     Mail,
@@ -11,9 +12,11 @@ from sendgrid.helpers.mail import (
 )
 from utils.pdf_generator import generate_itinerary_pdf
 
+load_dotenv()
+
 SENDGRID_API_KEY = os.getenv("SENDGRID_API_KEY")
-FROM_EMAIL = os.getenv("SENDGRID_FROM_EMAIL", "noreply@unmapped.app")
-FROM_NAME = os.getenv("SENDGRID_FROM_NAME", "Unmapped")
+FROM_EMAIL = "noreply@unmapped.app"
+FROM_NAME = "Unmapped"
 
 
 async def send_itinerary_email(to_email: str, trip_data: dict) -> bool:

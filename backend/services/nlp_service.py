@@ -7,6 +7,11 @@ nlp = spacy.load("en_core_web_sm")
 sentiment_analyzer = SentimentIntensityAnalyzer()
 
 
+def extract_locations(text: str) -> list[str]:
+    doc = nlp(text)
+    return [ent.text for ent in doc.ents if ent.label_ == "GPE"]
+
+
 def extract_entities(text: str) -> dict:
     """
     Run spaCy NER on the input text to extract structured travel entities.

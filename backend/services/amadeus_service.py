@@ -1,16 +1,14 @@
 import os
 import httpx
+from dotenv import load_dotenv
 from utils.cache import get_cache, set_cache, cache_key
+
+load_dotenv()
 
 AMADEUS_CLIENT_ID = os.getenv("AMADEUS_CLIENT_ID")
 AMADEUS_CLIENT_SECRET = os.getenv("AMADEUS_CLIENT_SECRET")
-AMADEUS_ENV = os.getenv("AMADEUS_ENV", "test")
 
-BASE_URL = (
-    "https://api.amadeus.com"
-    if AMADEUS_ENV == "production"
-    else "https://test.api.amadeus.com"
-)
+BASE_URL = "https://test.api.amadeus.com"
 AUTH_URL = f"{BASE_URL}/v1/security/oauth2/token"
 
 
