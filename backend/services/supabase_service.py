@@ -1,4 +1,5 @@
 import os
+import asyncio
 from dotenv import load_dotenv
 from fastapi import HTTPException
 from supabase import create_client, Client
@@ -86,3 +87,26 @@ async def verify_user_token(token: str) -> dict:
     """
     # TODO: Implement JWT verification
     pass
+
+
+async def get_user_profile(user_id: str) -> dict | None:
+    """
+    Fetch a user's profile row from the `profiles` table.
+
+    - SELECT * FROM profiles WHERE id = user_id LIMIT 1
+    - Returns the row dict (includes at minimum home_city) or None if not found
+    - Returns None on any error — never raises
+    """
+    try:
+        response = await asyncio.to_thread(
+            lambda: supabase.table("profiles")
+            .select("*")
+            .eq("id", user_id)
+            .limit(1)
+            .execute()
+        )
+        if response and response.data:
+            return response.data[0]
+        return None
+    except Exception:
+        return None

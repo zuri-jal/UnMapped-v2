@@ -1,22 +1,58 @@
+import asyncio
 from fastapi import APIRouter, HTTPException
 
 from models.request_models import TripRequest
 from models.response_models import TripResponse
-from services.nlp_service import extract_locations
+from services.nlp_service import extract_locations, extract_origin
 from services.openai_service import generate_itinerary
+from services.duffel_service import search_flights
+from services.supabase_service import get_user_profile
 
 router = APIRouter()
 
 
 @router.post("/", response_model=TripResponse)
 async def plan_trip(request: TripRequest):
-    locations = extract_locations(request.user_message)
+    # Run spaCy once; keep a clean copy for origin detection before destination injection
+    nlp_locations = extract_locations(request.user_message)
+
+    # Build locations list for OpenAI (explicit destination inserted at front if needed)
+    locations = list(nlp_locations)
     if request.destination and request.destination not in locations:
         locations.insert(0, request.destination)
 
+    destination = request.destination or (locations[-1] if locations else "")
+
+    # --- Three-tier origin fallback ---
+
+    # Tier 1: explicit origin field on the request
+    origin: str | None = request.origin or None
+
+    # Tier 2: saved home_city from the user's Supabase profile
+    if not origin and request.user_id:
+        profile = await get_user_profile(request.user_id)
+        if profile:
+            origin = profile.get("home_city") or None
+
+    # Tier 3: regex "from [city]" pattern first, then spaCy two-location positional fallback
+    if not origin:
+        origin = extract_origin(request.user_message)
+
+    if not origin:
+        raise HTTPException(status_code=400, detail="Please provide your departure city")
+
     try:
-        result = await generate_itinerary(request, locations)
+        result, flights = await asyncio.gather(
+            generate_itinerary(request, locations),
+            search_flights(
+                origin=origin,
+                destination=destination,
+                departure_date=str(request.departure_date),
+                adults=request.travelers,
+            ),
+        )
     except Exception as exc:
         raise HTTPException(status_code=502, detail=str(exc))
 
+    result["flights"] = flights
     return TripResponse(**result)

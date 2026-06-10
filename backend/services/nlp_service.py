@@ -12,6 +12,33 @@ def extract_locations(text: str) -> list[str]:
     return [ent.text for ent in doc.ents if ent.label_ == "GPE"]
 
 
+# Matches "from [City]" stopping before: "to", comma, period, "for", "travelling/traveling"
+_FROM_CITY_RE = re.compile(
+    r"\bfrom\s+([A-Za-z][A-Za-z\s]*?)(?=\s+to\b|\s*[,.]|\s+for\b|\s+travelling\b|\s+traveling\b|\s*$)",
+    re.IGNORECASE,
+)
+
+
+def extract_origin(text: str) -> str | None:
+    """
+    Extract departure city from a natural-language trip message.
+
+    1. Regex: finds "from [City]" before "to", comma, "for", "travelling/ing", or end-of-string.
+       Handles both "from X to Y" and "trip to Y from X" word orders.
+    2. spaCy GPE fallback: if two locations are found, the first-mentioned is treated as origin.
+    Returns None if no origin can be determined.
+    """
+    match = _FROM_CITY_RE.search(text)
+    if match:
+        return match.group(1).strip()
+
+    locations = extract_locations(text)
+    if len(locations) >= 2:
+        return locations[0]
+
+    return None
+
+
 def extract_entities(text: str) -> dict:
     """
     Run spaCy NER on the input text to extract structured travel entities.

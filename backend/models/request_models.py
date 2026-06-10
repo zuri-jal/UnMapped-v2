@@ -4,6 +4,8 @@ from datetime import date
 
 
 class TripRequest(BaseModel):
+    user_id: Optional[str] = Field(None, description="Supabase user UUID — used for profile-based origin lookup")
+    origin: Optional[str] = Field(None, description="Departure city or IATA code — overrides profile and NLP fallbacks")
     destination: Optional[str] = Field(None, description="Explicit destination — overrides message if set")
     departure_date: date
     duration_days: int = Field(..., ge=1)
