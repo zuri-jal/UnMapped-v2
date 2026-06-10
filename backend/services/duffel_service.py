@@ -1,6 +1,8 @@
 import os
+import json
 import httpx
 from dotenv import load_dotenv
+from openai import AsyncOpenAI
 from utils.cache import get_cache, set_cache, cache_key
 
 load_dotenv()
@@ -214,25 +216,68 @@ async def search_flights(
 
 
 async def search_hotels(
-    city_code: str,
-    check_in: str,
-    check_out: str,
-    adults: int = 1,
-    currency: str = "USD",
-    max_results: int = 10,
+    destination: str,
+    check_in_date: str,
+    check_out_date: str,
+    travelers: int = 1,
+    total_budget_usd: float = 1000.0,
+    duration_days: int = 7,
 ) -> list:
-    """
-    Search for hotel offers via the Duffel Stays Search API.
+    nightly_cap = round((total_budget_usd * 0.30) / max(duration_days, 1), 2)
 
-    - Check cache using cache_key("hotels", city_code, check_in, check_out)
-    - POST /stays/search with location, check_in_date, check_out_date, and guests
-    - Map each result to a HotelOffer-compatible dict with: offer_id, name, city,
-      stars, price_per_night, currency, amenities, coordinates
-    - Cache the result for 15 minutes
-    - Return list of hotel offer dicts
-    """
-    # TODO: Implement Duffel hotel search with caching
-    pass
+    key = cache_key("hotels", destination.lower(), check_in_date, check_out_date)
+    cached = await get_cache(key)
+    if cached is not None:
+        return cached
+
+    api_key = os.getenv("OPENAI_API_KEY")
+    if not api_key:
+        return []
+
+    prompt = (
+        f"You are a travel expert. Recommend exactly 3 real, named hotels that actually exist in {destination}. "
+        f"All hotels must be within 30 minutes of the main airport serving {destination}. "
+        f"All prices must be at most ${nightly_cap:.2f} per night. "
+        f"Include one budget option, one mid-range option, and one best-value option within this cap.\n\n"
+        f"Check-in: {check_in_date}\n"
+        f"Check-out: {check_out_date}\n"
+        f"Travelers: {travelers}\n\n"
+        f"Return a raw JSON array with exactly 3 objects. No markdown, no backticks, no explanation — only the JSON array.\n"
+        f"Each object must have exactly these fields:\n"
+        f'  "name": string,\n'
+        f'  "stars": integer 1-5,\n'
+        f'  "price_per_night_usd": number,\n'
+        f'  "total_price_usd": number,\n'
+        f'  "location": string (neighborhood or district in {destination}),\n'
+        f'  "check_in": "{check_in_date}",\n'
+        f'  "check_out": "{check_out_date}",\n'
+        f'  "distance_from_airport": string (e.g. "20 minutes by taxi"),\n'
+        f'  "why_recommended": string (one sentence)\n'
+    )
+
+    client = AsyncOpenAI(api_key=api_key)
+
+    for attempt in range(2):
+        try:
+            completion = await client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.3,
+            )
+            raw = completion.choices[0].message.content.strip()
+            hotels = json.loads(raw)
+            if isinstance(hotels, list):
+                top3 = hotels[:3]
+                await set_cache(key, top3, ttl_seconds=900)
+                return top3
+        except json.JSONDecodeError:
+            if attempt == 1:
+                return []
+            continue
+        except Exception:
+            return []
+
+    return []
 
 
 async def book_flight(offer_id: str, traveller_info: dict) -> dict:

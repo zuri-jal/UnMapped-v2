@@ -26,6 +26,7 @@ class TripResponse(BaseModel):
     budget_breakdown: BudgetBreakdown
     discovery_insights: List[Any] = []
     flights: List[Any] = []
+    hotels: List[Any] = []
 
 
 class ActivityModel(BaseModel):

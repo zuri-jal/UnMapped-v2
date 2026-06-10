@@ -1,11 +1,12 @@
 import asyncio
+from datetime import timedelta
 from fastapi import APIRouter, HTTPException
 
 from models.request_models import TripRequest
 from models.response_models import TripResponse
 from services.nlp_service import extract_locations, extract_origin
 from services.openai_service import generate_itinerary
-from services.duffel_service import search_flights
+from services.duffel_service import search_flights, search_hotels
 from services.supabase_service import get_user_profile
 
 router = APIRouter()
@@ -41,18 +42,30 @@ async def plan_trip(request: TripRequest):
     if not origin:
         raise HTTPException(status_code=400, detail="Please provide your departure city")
 
+    check_in_date = str(request.departure_date)
+    check_out_date = str(request.departure_date + timedelta(days=request.duration_days))
+
     try:
-        result, flights = await asyncio.gather(
+        result, flights, hotels = await asyncio.gather(
             generate_itinerary(request, locations),
             search_flights(
                 origin=origin,
                 destination=destination,
-                departure_date=str(request.departure_date),
+                departure_date=check_in_date,
                 adults=request.travelers,
+            ),
+            search_hotels(
+                destination=destination,
+                check_in_date=check_in_date,
+                check_out_date=check_out_date,
+                travelers=request.travelers,
+                total_budget_usd=request.budget_usd,
+                duration_days=request.duration_days,
             ),
         )
     except Exception as exc:
         raise HTTPException(status_code=502, detail=str(exc))
 
     result["flights"] = flights
+    result["hotels"] = hotels
     return TripResponse(**result)
