@@ -1,0 +1,46 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    font-family: 'Inter', system-ui, sans-serif;
+  }
+
+  body {
+    background-color: #FDFAF8;
+    color: #1a1a1a;
+  }
+
+  /* Custom scrollbar to match warm design */
+  ::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: #F5F0EE;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: #B07050;
+    border-radius: 3px;
+  }
+}
+
+@layer components {
+  .btn-primary {
+    @apply bg-rose-gold text-white px-6 py-3 rounded-xl font-medium hover:bg-rose-gold-dark transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+
+  .btn-secondary {
+    @apply border border-rose-gold text-rose-gold px-6 py-3 rounded-xl font-medium hover:bg-rose-gold hover:text-white transition-colors duration-200;
+  }
+
+  .card {
+    @apply bg-white rounded-2xl shadow-sm border border-warm-gray p-4;
+  }
+
+  .input-field {
+    @apply w-full border border-warm-gray rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-rose-gold focus:border-transparent bg-white text-gray-900;
+  }
+}
