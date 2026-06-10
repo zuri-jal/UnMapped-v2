@@ -5,9 +5,9 @@ import useTripStore from '../store/tripStore'
 export default function TransportTab() {
   const { trip } = useTripStore()
 
-  // TODO: Fetch airport transfer options with estimated prices (use Amadeus transfers API)
+  // TODO: Fetch airport transfer options with estimated prices (use Duffel transfers API)
   // TODO: Show inter-city rail / bus options if it's a multi-city trip
-  // TODO: Add car rental suggestions via Amadeus car rental endpoint
+  // TODO: Add car rental suggestions via Duffel car rental endpoint
   // TODO: Fetch public transport tips from openai_service based on destination
 
   const destination = trip?.destination ?? 'your destination'
@@ -49,7 +49,7 @@ export default function TransportTab() {
           <div>
             <p className="font-medium text-gray-800">Car Rental</p>
             <p className="text-xs text-gray-500">
-              Amadeus car rental options will appear here.
+              Duffel car rental options will appear here.
             </p>
           </div>
         </div>

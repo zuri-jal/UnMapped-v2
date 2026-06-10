@@ -35,8 +35,8 @@ class UpdateRequest(BaseModel):
 class ConfirmRequest(BaseModel):
     trip_id: str
     user_id: str
-    selected_flight_id: Optional[str] = Field(None, description="offer_id from amadeus_service.search_flights")
-    selected_hotel_id: Optional[str] = Field(None, description="offer_id from amadeus_service.search_hotels")
+    selected_flight_id: Optional[str] = Field(None, description="offer_id from duffel_service.search_flights")
+    selected_hotel_id: Optional[str] = Field(None, description="offer_id from duffel_service.search_hotels")
     traveller_details: Optional[List[dict]] = Field(
         default_factory=list,
         description="List of traveller dicts: { first_name, last_name, dob, passport_number, nationality }",

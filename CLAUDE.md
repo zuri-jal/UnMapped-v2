@@ -17,7 +17,7 @@ UnMapped v2/
 │   │   └── discover.py    # POST /discover
 │   ├── services/          # External integrations — one file per provider
 │   │   ├── openai_service.py
-│   │   ├── amadeus_service.py
+│   │   ├── duffel_service.py
 │   │   ├── discovery_service.py   # Reddit, YouTube, Google Trends
 │   │   ├── nlp_service.py         # spaCy + VADER
 │   │   ├── email_service.py       # SendGrid + PDF attachment
@@ -69,7 +69,7 @@ All secrets live in `.env` files — never hardcoded.
 
 | File | Purpose |
 |---|---|
-| `backend/.env` | OpenAI, Amadeus, Supabase service role key, SendGrid, Reddit, YouTube |
+| `backend/.env` | OpenAI, Duffel, Supabase service role key, SendGrid, Reddit, YouTube |
 | `frontend/.env` | `VITE_API_BASE_URL`, `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` |
 
 See `backend/.env.example` and `frontend/.env.example` for the full list.
@@ -78,10 +78,10 @@ See `backend/.env.example` and `frontend/.env.example` for the full list.
 
 ### Data flow (happy path)
 1. User types a message in `ChatPanel` → `InputForm` calls `api.js:planTrip()`
-2. `POST /plan` → `nlp_service` extracts intent → `openai_service` generates itinerary → `amadeus_service` fetches flights + hotels → `supabase_service` persists draft → returns `PlanResponse`
+2. `POST /plan` → `nlp_service` extracts intent → `openai_service` generates itinerary → `duffel_service` fetches flights + hotels → `supabase_service` persists draft → returns `PlanResponse`
 3. Frontend stores the response in Zustand (`tripStore`) → `Dashboard` renders map + tabs
 4. User selects a flight + hotel → clicks "Confirm & Book" → `ConfirmScreen` → `POST /confirm`
-5. Backend books via Amadeus, generates PDF via `pdf_generator`, emails via `email_service`
+5. Backend books via Duffel, generates PDF via `pdf_generator`, emails via `email_service`
 
 ### State management
 All trip UI state lives in `src/store/tripStore.js` (Zustand). Key fields:
@@ -115,7 +115,7 @@ Tailwind component classes defined in `src/index.css`: `btn-primary`, `btn-secon
 | `fastapi` + `uvicorn` | API server |
 | `supabase` | Database + auth (server-side) |
 | `openai` | GPT itinerary generation |
-| `httpx` | Async HTTP for Amadeus |
+| `httpx` | Async HTTP for Duffel REST API |
 | `spacy` + `vaderSentiment` | NLP entity extraction + sentiment |
 | `sendgrid` + `fpdf2` | Email + PDF generation |
 | `praw` | Reddit API |

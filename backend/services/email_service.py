@@ -40,7 +40,7 @@ async def send_confirmation_email(to_email: str, booking_refs: dict) -> bool:
 
     - booking_refs contains: flight_booking_ref, hotel_booking_ref, trip_id
     - Build an HTML email body with the booking references clearly displayed
-    - Include links to manage/cancel bookings on the Amadeus portal
+    - Include links to manage/cancel bookings on the Duffel portal
     - Send via SendGrid and return True on success
     """
     # TODO: Implement booking confirmation email

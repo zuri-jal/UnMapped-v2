@@ -45,7 +45,7 @@ export default function Landing() {
         {/* Feature grid — placeholder */}
         <div className="mt-24 grid grid-cols-1 md:grid-cols-3 gap-6 max-w-4xl w-full text-left">
           {[
-            { icon: '✈️', title: 'Real Flights & Hotels', body: 'Live prices and instant booking via Amadeus.' },
+            { icon: '✈️', title: 'Real Flights & Hotels', body: 'Live prices and instant booking via Duffel.' },
             { icon: '🤖', title: 'AI Itineraries', body: 'GPT-4 plans your days so you can focus on enjoying them.' },
             { icon: '🌍', title: 'Community Discovery', body: 'Reddit, YouTube and Google Trends surface hidden gems.' },
           ].map(({ icon, title, body }) => (

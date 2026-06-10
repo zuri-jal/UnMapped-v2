@@ -13,8 +13,8 @@ async def confirm_trip(request: ConfirmRequest):
 
     Steps:
     1. Call supabase_service.get_trip(trip_id) to load the finalised trip
-    2. Call amadeus_service.book_flight(selected_flight_id, traveller_details)
-    3. Call amadeus_service.book_hotel(selected_hotel_id, traveller_details)
+    2. Call duffel_service.book_flight(selected_flight_id, traveller_details)
+    3. Call duffel_service.book_hotel(selected_hotel_id, traveller_details)
     4. Call pdf_generator.generate_itinerary_pdf(trip_data) to create the PDF
     5. Call email_service.send_itinerary_email(user_email, trip_data) with PDF attachment
     6. Call email_service.send_confirmation_email(user_email, booking_refs)

@@ -16,7 +16,7 @@ async def update_trip(request: UpdateRequest):
     2. Call nlp_service.detect_travel_intent() to classify the change type
     3. Call nlp_service.extract_entities() to find new dates, destinations, etc.
     4. Call openai_service.refine_itinerary() with current itinerary + change message
-    5. If dates changed, re-call amadeus_service.search_flights() and search_hotels()
+    5. If dates changed, re-call duffel_service.search_flights() and search_hotels()
     6. Call supabase_service.update_trip() to persist the updated record
     7. Return UpdateResponse with modified days, flights, hotels
     """
