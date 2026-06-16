@@ -1,3 +1,5 @@
+from datetime import datetime as _dt
+
 from fpdf import FPDF
 
 BRAND_COLOR = (176, 112, 80)   # Rose gold #B07050
@@ -64,6 +66,105 @@ def generate_itinerary_pdf(trip_data: dict) -> bytes:
 
     for day in trip_data.get("days", []):
         add_day_section(pdf, day)
+
+    return bytes(pdf.output())
+
+
+class ReceiptPDF(FPDF):
+    def __init__(self, booking_reference: str):
+        super().__init__()
+        self.booking_reference = booking_reference
+        self.set_margins(15, 36, 15)
+
+    def header(self):
+        self.set_fill_color(*BRAND_COLOR)
+        self.rect(0, 0, 210, 28, "F")
+        self.set_xy(0, 7)
+        self.set_text_color(255, 255, 255)
+        self.set_font("Helvetica", "B", 14)
+        self.cell(210, 10, "Unmapped  -  Booking Confirmation", align="C", ln=True)
+        self.set_font("Helvetica", "", 9)
+        self.cell(210, 9, f"Booking Reference: {self.booking_reference}", align="C", ln=True)
+        self.set_y(36)
+
+    def footer(self):
+        self.set_y(-15)
+        self.set_font("Helvetica", "I", 8)
+        self.set_text_color(150, 150, 150)
+        self.cell(0, 10, "Thank you for booking with Unmapped", align="C")
+
+
+def _section_header_receipt(pdf: FPDF, title: str) -> None:
+    pdf.set_fill_color(*BRAND_COLOR)
+    pdf.set_text_color(255, 255, 255)
+    pdf.set_font("Helvetica", "B", 10)
+    pdf.cell(0, 7, f"  {title}", fill=True, ln=True)
+    pdf.set_text_color(*TEXT_COLOR)
+    pdf.ln(1)
+
+
+def _label_value(pdf: FPDF, label: str, value: str) -> None:
+    pdf.set_font("Helvetica", "B", 9)
+    pdf.cell(65, 6, label, ln=False)
+    pdf.set_font("Helvetica", "", 9)
+    pdf.cell(0, 6, value, ln=True)
+
+
+def _parse_nights(check_in: str, check_out: str) -> int:
+    for fmt in ("%Y-%m-%d", "%d/%m/%Y", "%m/%d/%Y"):
+        try:
+            return max(1, (_dt.strptime(check_out, fmt) - _dt.strptime(check_in, fmt)).days)
+        except ValueError:
+            continue
+    return 1
+
+
+def generate_receipt(confirm_request, booking_reference: str) -> bytes:
+    """Build a booking receipt PDF and return it as bytes."""
+    flight = confirm_request.selected_flight
+    hotel = confirm_request.selected_hotel
+
+    pdf = ReceiptPDF(booking_reference=booking_reference)
+    pdf.set_auto_page_break(auto=True, margin=20)
+    pdf.add_page()
+
+    _section_header_receipt(pdf, "Passenger Information")
+    _label_value(pdf, "Name:", confirm_request.passenger_name)
+    _label_value(pdf, "Email:", confirm_request.passenger_email)
+    pdf.ln(5)
+
+    _section_header_receipt(pdf, "Flight Details")
+    _label_value(pdf, "Airline:", flight.airline)
+    if flight.flight_number:
+        _label_value(pdf, "Flight Number:", flight.flight_number)
+    _label_value(pdf, "Departure:", flight.departure_time)
+    _label_value(pdf, "Arrival:", flight.arrival_time)
+    _label_value(pdf, "Duration:", flight.duration)
+    _label_value(pdf, "Stops:", "Non-stop" if flight.stops == 0 else str(flight.stops))
+    _label_value(pdf, "Flight Price:", f"${flight.price_usd:,.2f} USD")
+    pdf.ln(5)
+
+    _section_header_receipt(pdf, "Hotel Details")
+    _label_value(pdf, "Hotel:", hotel.name)
+    _label_value(pdf, "Location:", hotel.location)
+    if hotel.stars:
+        _label_value(pdf, "Stars:", f"{hotel.stars} stars")
+    _label_value(pdf, "Check-in:", hotel.check_in)
+    _label_value(pdf, "Check-out:", hotel.check_out)
+    nights = _parse_nights(hotel.check_in, hotel.check_out)
+    _label_value(pdf, "Nights:", str(nights))
+    _label_value(pdf, "Accommodation Total:", f"${hotel.total_price_usd:,.2f} USD")
+    pdf.ln(5)
+
+    _section_header_receipt(pdf, "Cost Breakdown")
+    _label_value(pdf, "Flights:", f"${flight.price_usd:,.2f} USD")
+    _label_value(pdf, "Accommodation:", f"${hotel.total_price_usd:,.2f} USD")
+    pdf.ln(2)
+    pdf.set_font("Helvetica", "B", 10)
+    pdf.set_text_color(*BRAND_COLOR)
+    pdf.cell(65, 8, "Grand Total:", ln=False)
+    pdf.cell(0, 8, f"${confirm_request.total_cost:,.2f} USD", ln=True)
+    pdf.set_text_color(*TEXT_COLOR)
 
     return bytes(pdf.output())
 

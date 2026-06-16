@@ -1,46 +1,65 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 @layer base {
-  html {
-    font-family: 'Inter', system-ui, sans-serif;
-  }
-
+  *, *::before, *::after { box-sizing: border-box; }
+  html { font-family: 'Inter', system-ui, sans-serif; }
   body {
-    background-color: #FDFAF8;
-    color: #1a1a1a;
+    background-color: #0A0A0F;
+    color: #F0ECE8;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
-
-  /* Custom scrollbar to match warm design */
-  ::-webkit-scrollbar {
-    width: 6px;
-  }
-
-  ::-webkit-scrollbar-track {
-    background: #F5F0EE;
-  }
-
-  ::-webkit-scrollbar-thumb {
-    background: #B07050;
-    border-radius: 3px;
-  }
+  ::-webkit-scrollbar { width: 4px; height: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: #B07050; border-radius: 2px; }
+  ::-webkit-scrollbar-thumb:hover { background: #C4896A; }
 }
 
 @layer components {
   .btn-primary {
-    @apply bg-rose-gold text-white px-6 py-3 rounded-xl font-medium hover:bg-rose-gold-dark transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed;
+    @apply bg-rose-gold text-white px-6 py-3 rounded-xl font-medium transition-all duration-200
+      hover:bg-rose-gold-dark disabled:opacity-40 disabled:cursor-not-allowed;
   }
-
   .btn-secondary {
-    @apply border border-rose-gold text-rose-gold px-6 py-3 rounded-xl font-medium hover:bg-rose-gold hover:text-white transition-colors duration-200;
+    @apply border border-rose-gold text-rose-gold px-6 py-3 rounded-xl font-medium transition-all duration-200
+      hover:bg-rose-gold hover:text-white;
   }
-
+  /* Light-mode card */
   .card {
-    @apply bg-white rounded-2xl shadow-sm border border-warm-gray p-4;
+    @apply bg-white rounded-2xl shadow-sm border border-[#E8D5CC] p-4;
   }
-
+  /* Dark-mode card */
+  .card-dark {
+    @apply bg-[#0F0D12] rounded-2xl border border-[#1E1B25] p-4;
+  }
   .input-field {
-    @apply w-full border border-warm-gray rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-rose-gold focus:border-transparent bg-white text-gray-900;
+    @apply w-full border border-[#E8D5CC] rounded-xl px-4 py-3
+      focus:outline-none focus:ring-2 focus:ring-rose-gold focus:border-transparent
+      bg-white text-gray-900 placeholder-[#8A7A72];
   }
+  .input-dark {
+    @apply w-full border border-[#1E1B25] rounded-xl px-4 py-3
+      focus:outline-none focus:ring-1 focus:ring-rose-gold focus:border-rose-gold
+      bg-[#0F0D12] text-[#F0ECE8] placeholder-[#8A7A72] transition-all;
+  }
+}
+
+/* Subtle dot-grid world-map pattern used on hero/search backgrounds */
+.dot-grid {
+  background-image: radial-gradient(circle, rgba(176,112,80,0.18) 1px, transparent 1px);
+  background-size: 28px 28px;
+}
+
+/* Rose-gold radial glow blob */
+.glow-rose {
+  background: radial-gradient(ellipse at center, rgba(176,112,80,0.25) 0%, transparent 70%);
+}
+
+/* Dashed Leaflet polyline rendered via SVG — override stroke */
+.leaflet-pane .route-line {
+  stroke-dasharray: 8 6;
 }

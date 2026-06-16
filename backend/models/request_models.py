@@ -34,15 +34,36 @@ class UpdateRequest(BaseModel):
     message: str = Field(..., description="Natural-language change instruction")
 
 
+class SelectedFlight(BaseModel):
+    airline: str
+    flight_number: Optional[str] = None
+    departure_time: str
+    arrival_time: str
+    duration: Optional[str] = None
+    price_usd: float
+    stops: int = 0
+
+
+class SelectedHotel(BaseModel):
+    name: str
+    stars: Optional[int] = None
+    price_per_night_usd: float
+    total_price_usd: float
+    location: str
+    check_in: Optional[str] = None
+    check_out: Optional[str] = None
+    distance_from_airport: Optional[str] = None
+    why_recommended: Optional[str] = None
+
+
 class ConfirmRequest(BaseModel):
-    trip_id: str
-    user_id: str
-    selected_flight_id: Optional[str] = Field(None, description="offer_id from duffel_service.search_flights")
-    selected_hotel_id: Optional[str] = Field(None, description="offer_id from duffel_service.search_hotels")
-    traveller_details: Optional[List[dict]] = Field(
-        default_factory=list,
-        description="List of traveller dicts: { first_name, last_name, dob, passport_number, nationality }",
-    )
+    user_id: Optional[str] = None
+    trip_data: dict
+    selected_flight: SelectedFlight
+    selected_hotel: SelectedHotel
+    total_cost: float
+    passenger_name: str
+    passenger_email: str
 
 
 class DiscoverRequest(BaseModel):

@@ -1,57 +1,68 @@
 import { create } from 'zustand'
 
-/**
- * Global Zustand store for all trip-related UI state.
- *
- * Shape reference:
- *   trip           — PlanResponse object from the backend (or null)
- *   messages       — Chat history array: [{ role: 'user'|'assistant', content: string }]
- *   isLoading      — True while a backend request is in flight
- *   isConfirming   — True when the ConfirmScreen is visible
- *   selectedFlightId — offer_id of the user's chosen flight (or null)
- *   selectedHotelId  — offer_id of the user's chosen hotel (or null)
- */
-const useTripStore = create((set, get) => ({
-  trip: null,
+const _darkInit = (() => {
+  try { return localStorage.getItem('unmapped-dark') !== 'false' } catch { return true }
+})()
+
+const useTripStore = create((set) => ({
+  tripData: null,
   messages: [],
-  isLoading: false,
-  isConfirming: false,
   selectedFlightId: null,
   selectedHotelId: null,
+  totalCost: 0,
+  isLoading: false,
+  isConfirming: false,
+  darkMode: _darkInit,
+  pendingQuery: null,
 
-  /** Replace the entire trip object (called after /plan or /update). */
-  setTrip: (trip) => set({ trip }),
+  setTripData: (tripData) =>
+    set({ tripData, selectedFlightId: null, selectedHotelId: null, totalCost: 0 }),
 
-  /** Append a single message to the chat history. */
   addMessage: (role, content) =>
-    set((state) => ({ messages: [...state.messages, { role, content }] })),
+    set((s) => ({ messages: [...s.messages, { role, content }] })),
 
-  /** Show or hide the full-screen loading overlay. */
-  setLoading: (isLoading) => set({ isLoading }),
+  selectFlight: (id) =>
+    set((s) => {
+      const flight = s.tripData?.flights?.find((f) => (f.flight_number || '') === id)
+      const hotel  = s.tripData?.hotels?.find((h) => (h.name || '') === s.selectedHotelId)
+      const nights = s.tripData?.days?.length ?? 7
+      const totalCost =
+        Number(flight?.price_usd ?? 0) + Number(hotel?.price_per_night_usd ?? 0) * nights
+      return { selectedFlightId: id, totalCost }
+    }),
 
-  /** Show or hide the ConfirmScreen. */
-  setIsConfirming: (isConfirming) => set({ isConfirming }),
+  selectHotel: (id) =>
+    set((s) => {
+      const flight = s.tripData?.flights?.find((f) => (f.flight_number || '') === s.selectedFlightId)
+      const hotel  = s.tripData?.hotels?.find((h) => (h.name || '') === id)
+      const nights = s.tripData?.days?.length ?? 7
+      const totalCost =
+        Number(flight?.price_usd ?? 0) + Number(hotel?.price_per_night_usd ?? 0) * nights
+      return { selectedHotelId: id, totalCost }
+    }),
 
-  /** Mark a flight offer as selected (highlights the FlightCard and uses it in booking). */
-  selectFlight: (offerId) => set({ selectedFlightId: offerId }),
+  setLoading:    (v) => set({ isLoading: v }),
+  setConfirming: (v) => set({ isConfirming: v }),
 
-  /** Mark a hotel offer as selected (highlights the HotelCard and uses it in booking). */
-  selectHotel: (offerId) => set({ selectedHotelId: offerId }),
+  setPendingQuery: (q) => set({ pendingQuery: q }),
 
-  /** Reset all trip state — called after a booking is confirmed or user starts over. */
-  resetTrip: () =>
+  toggleDarkMode: () =>
+    set((s) => {
+      const next = !s.darkMode
+      try { localStorage.setItem('unmapped-dark', String(next)) } catch {}
+      return { darkMode: next }
+    }),
+
+  reset: () =>
     set({
-      trip: null,
+      tripData: null,
       messages: [],
       isLoading: false,
       isConfirming: false,
       selectedFlightId: null,
       selectedHotelId: null,
+      totalCost: 0,
     }),
-
-  // TODO: Add persist middleware (zustand/middleware) to save state to localStorage
-  // TODO: Add updateDay(dayNumber, updatedDay) for optimistic itinerary edits
-  // TODO: Add setUser(user) to store the authenticated Supabase user globally
 }))
 
 export default useTripStore

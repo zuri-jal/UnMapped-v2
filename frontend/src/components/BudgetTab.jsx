@@ -1,67 +1,70 @@
 import React from 'react'
 import useTripStore from '../store/tripStore'
 
-// Budget tab — breakdown of estimated costs across all trip categories
 export default function BudgetTab() {
-  const { trip, selectedFlightId, selectedHotelId } = useTripStore()
+  const { tripData, selectedFlightId, selectedHotelId } = useTripStore()
 
-  // TODO: Add a daily spending allowance field the user can set
-  // TODO: Add a currency conversion toggle using a live rates API
-  // TODO: Replace hardcoded first items with the user's selected flight/hotel by offer_id
-  // TODO: Add a visual progress bar per category (cost as % of total budget)
+  if (!tripData) {
+    return (
+      <div className="text-center text-[#8A7A72] py-10 px-3">
+        <div className="text-3xl mb-2">💰</div>
+        <p className="text-xs">Budget breakdown will appear here after planning your trip.</p>
+      </div>
+    )
+  }
 
-  const nights = trip?.days?.length ?? 0
+  const bb = tripData.budget_breakdown ?? {}
 
-  const selectedFlight = trip?.flights?.find((f) => f.offer_id === selectedFlightId) ?? trip?.flights?.[0]
-  const selectedHotel = trip?.hotels?.find((h) => h.offer_id === selectedHotelId) ?? trip?.hotels?.[0]
+  // Override with selected flight/hotel actual prices
+  const selFlight = tripData.flights?.find((f) => (f.flight_number || '') === selectedFlightId)
+  const selHotel  = tripData.hotels?.find((h) => (h.name || '') === selectedHotelId)
+  const nights = tripData.days?.length ?? 7
 
-  const flightCost = selectedFlight?.price ?? 0
-  const hotelCost = selectedHotel ? selectedHotel.price_per_night * nights : 0
-  const activitiesCost =
-    trip?.days?.reduce(
-      (sum, day) => sum + day.activities.reduce((s, a) => s + (a.estimated_cost ?? 0), 0),
-      0
-    ) ?? 0
+  const flightCost  = selFlight ? Number(selFlight.price_usd ?? 0) : Number(bb.flights ?? 0)
+  const hotelCost   = selHotel
+    ? Number(selHotel.price_per_night_usd ?? 0) * nights
+    : Number(bb.accommodation ?? 0)
+  const foodCost    = Number(bb.food ?? 0)
+  const transportCost = Number(bb.transport ?? 0)
+  const activitiesCost = Number(bb.activities ?? 0)
+  const total       = flightCost + hotelCost + foodCost + transportCost + activitiesCost
+  const budget      = Number(bb.total ?? total)
+  const pct         = budget > 0 ? Math.min((total / budget) * 100, 100) : 0
 
-  const total = flightCost + hotelCost + activitiesCost
-  const currency = trip?.currency ?? 'USD'
-
-  const categories = [
-    { label: 'Flights', amount: flightCost, icon: '✈️' },
-    { label: `Accommodation (${nights} nights)`, amount: hotelCost, icon: '🏨' },
-    { label: 'Activities', amount: activitiesCost, icon: '🎭' },
+  const rows = [
+    { label: 'Flights',       amount: flightCost,    icon: '✈️' },
+    { label: `Hotel (${nights}n)`, amount: hotelCost, icon: '🏨' },
+    { label: 'Food',          amount: foodCost,       icon: '🍜' },
+    { label: 'Transport',     amount: transportCost,  icon: '🚌' },
+    { label: 'Activities',    amount: activitiesCost, icon: '🎭' },
   ]
 
   return (
-    <div>
-      <h3 className="font-semibold text-gray-800 mb-4">Budget Breakdown</h3>
+    <div className="px-1">
+      {/* Total + progress bar */}
+      <div className="card-dark mb-3 text-center py-3">
+        <p className="text-[10px] text-[#8A7A72] mb-0.5">Estimated total</p>
+        <p className="text-xl font-bold text-rose-gold">${total.toLocaleString()}</p>
+        <div className="mt-2 h-1.5 bg-[#1E1B25] rounded-full overflow-hidden">
+          <div
+            className="h-full bg-rose-gold rounded-full transition-all duration-500"
+            style={{ width: `${pct}%` }}
+          />
+        </div>
+        <p className="text-[9px] text-[#8A7A72] mt-1">{Math.round(pct)}% of budget used</p>
+      </div>
 
-      <div className="space-y-3">
-        {categories.map(({ label, amount, icon }) => (
-          <div key={label} className="card flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <span className="text-lg">{icon}</span>
-              <span className="text-sm font-medium text-gray-700">{label}</span>
+      {/* Row breakdown */}
+      <div className="space-y-1.5">
+        {rows.map(({ label, amount, icon }) => (
+          <div key={label} className="flex items-center justify-between py-1.5 border-b border-[#1E1B25]">
+            <div className="flex items-center gap-1.5">
+              <span className="text-sm">{icon}</span>
+              <span className="text-[10px] text-[#8A7A72]">{label}</span>
             </div>
-            <span className="text-sm font-semibold text-rose-gold">
-              {currency} {amount.toLocaleString()}
-            </span>
+            <span className="text-[11px] font-semibold text-rose-gold">${amount.toLocaleString()}</span>
           </div>
         ))}
-
-        {/* Total */}
-        <div className="card flex items-center justify-between bg-rose-gold/5 border-rose-gold/20">
-          <span className="font-semibold text-gray-900">Estimated Total</span>
-          <span className="font-bold text-rose-gold text-xl">
-            {currency} {total.toLocaleString()}
-          </span>
-        </div>
-
-        {trip?.total_estimated_cost && (
-          <p className="text-xs text-gray-400 text-center mt-2">
-            AI estimate: {currency} {trip.total_estimated_cost.toLocaleString()}
-          </p>
-        )}
       </div>
     </div>
   )

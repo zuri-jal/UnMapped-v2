@@ -1,40 +1,82 @@
-import React from 'react'
-import ChatPanel from '../components/ChatPanel'
-import Dashboard from '../components/Dashboard'
-import LoadingState from '../components/LoadingState'
-import ConfirmScreen from '../components/ConfirmScreen'
+import React, { useEffect } from 'react'
+import ChatPanel   from '../components/ChatPanel'
+import CenterPanel from '../components/CenterPanel'
+import RightPanel  from '../components/RightPanel'
 import useTripStore from '../store/tripStore'
+import { planTrip } from '../services/api'
 
-// Main planning page — split layout: chat panel left, trip dashboard right
+function nextDeparture() {
+  const d = new Date()
+  d.setDate(d.getDate() + 30)
+  return d.toISOString().split('T')[0]
+}
+
+function parseQuery(q) {
+  const lq = q.toLowerCase()
+
+  const daysMatch    = lq.match(/(\d+)\s*days?/)
+  const duration_days = daysMatch ? parseInt(daysMatch[1], 10) : 7
+
+  const budgetDollar = lq.match(/\$\s*(\d[\d,]*)/)
+  const budgetWord   = lq.match(/budget\s+(?:of\s+)?(\d[\d,]*)/)
+  const budgetMatch  = budgetDollar ?? budgetWord
+  const budget_usd   = budgetMatch ? parseFloat(budgetMatch[1].replace(/,/g, '')) : 2000
+
+  const travelersMatch = lq.match(/(\d+)\s*(?:people|persons?|travelers?)/)
+  const travelers = travelersMatch ? parseInt(travelersMatch[1], 10) : 1
+
+  const styleKeywords = ['adventure', 'luxury', 'budget', 'cultural', 'beach']
+  const travel_style  = styleKeywords.find((s) => lq.includes(s)) ?? 'adventure'
+
+  const fromMatch = q.match(/\bfrom\s+([A-Za-z][a-z]+(?:\s+[A-Za-z][a-z]+)?)/i)
+  const origin    = fromMatch ? fromMatch[1].trim() : null
+
+  const destMatch   = q.match(/\b(?:in|to|visit|explore)\s+([A-Za-z][a-z]+(?:\s+[A-Za-z][a-z]+)?)/i)
+  const destination = destMatch ? destMatch[1].trim() : null
+
+  return {
+    user_message: q,
+    destination,
+    origin,
+    duration_days,
+    budget_usd,
+    travelers,
+    travel_style,
+    departure_date: nextDeparture(),
+  }
+}
+
 export default function Plan() {
-  const { trip, isLoading, isConfirming } = useTripStore()
+  const { pendingQuery, setPendingQuery, setTripData, addMessage, setLoading } = useTripStore()
 
-  // TODO: Add auth guard — redirect to / if user is not logged in (check Supabase session)
-  // TODO: Load user's most recent draft trip from Supabase on first mount
+  useEffect(() => {
+    if (!pendingQuery) return
+    const query = pendingQuery
+    setPendingQuery(null)
+    addMessage('user', query)
+    setLoading(true)
 
-  if (isLoading) return <LoadingState />
-  if (isConfirming) return <ConfirmScreen />
+    planTrip(parseQuery(query)).then(({ data, error }) => {
+      if (error) {
+        addMessage('assistant', `Sorry, something went wrong: ${error}`)
+      } else if (data) {
+        setTripData(data)
+        addMessage('assistant', data.summary ?? "Here's your trip! Explore the map and panels.")
+      }
+      setLoading(false)
+    })
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
-    <div className="flex h-screen overflow-hidden bg-warm-white">
-      {/* Left panel — chat interface (fixed width) */}
-      <div className="w-[420px] min-w-[380px] flex flex-col border-r border-warm-gray shrink-0">
+    <div className="flex h-screen overflow-hidden bg-[#0A0A0F]">
+      <div className="w-60 shrink-0 border-r border-[#1E1B25] flex flex-col overflow-hidden">
         <ChatPanel />
       </div>
-
-      {/* Right panel — trip dashboard (fills remaining width) */}
-      <div className="flex-1 overflow-y-auto">
-        {trip ? (
-          <Dashboard />
-        ) : (
-          <div className="flex items-center justify-center h-full text-gray-400">
-            <div className="text-center">
-              <p className="text-4xl mb-4">✈️</p>
-              <p className="text-lg font-medium text-gray-600">Your trip will appear here</p>
-              <p className="text-sm mt-1">Start chatting to plan your adventure</p>
-            </div>
-          </div>
-        )}
+      <div className="flex-1 flex flex-col overflow-hidden min-w-0">
+        <CenterPanel />
+      </div>
+      <div className="w-[220px] shrink-0 border-l border-[#1E1B25] flex flex-col overflow-hidden">
+        <RightPanel />
       </div>
     </div>
   )

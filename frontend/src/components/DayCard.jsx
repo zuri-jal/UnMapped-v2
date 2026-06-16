@@ -1,64 +1,46 @@
 import React, { useState } from 'react'
 
-// Expandable card for a single day's activities in the itinerary
-export default function DayCard({ day }) {
-  const [isExpanded, setIsExpanded] = useState(true)
+const PERIODS = [
+  { key: 'morning',   label: '🌅 Morning' },
+  { key: 'afternoon', label: '☀️ Afternoon' },
+  { key: 'evening',   label: '🌙 Evening' },
+]
 
-  // TODO: Add drag-to-reorder activities using @dnd-kit/sortable
-  // TODO: Add inline activity edit — click title to edit in place
-  // TODO: Add "Add activity" button that pre-fills a chat message in InputForm
+export default function DayCard({ day }) {
+  const [open, setOpen] = useState(true)
+  const dayNum = day.day ?? day.day_number
 
   return (
-    <div className="card mb-4">
+    <div className="card-dark mb-2">
       <button
         className="flex items-center justify-between w-full"
-        onClick={() => setIsExpanded((prev) => !prev)}
-        aria-expanded={isExpanded}
+        onClick={() => setOpen((v) => !v)}
       >
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-full bg-rose-gold text-white text-sm font-bold flex items-center justify-center shrink-0">
-            {day.day_number}
+        <div className="flex items-center gap-2.5">
+          <div className="w-7 h-7 rounded-full bg-rose-gold flex items-center justify-center text-white text-[11px] font-bold shrink-0">
+            {dayNum}
           </div>
           <div className="text-left">
-            <p className="font-semibold text-gray-900">Day {day.day_number}</p>
+            <p className="text-xs font-semibold text-[#F0ECE8] leading-tight">
+              Day {dayNum} — {day.location}
+            </p>
             {day.date && (
-              <p className="text-xs text-gray-400">{day.date}</p>
+              <p className="text-[9px] text-[#8A7A72] mt-0.5">{day.date}</p>
             )}
           </div>
         </div>
-        <span className="text-gray-400 text-xs">{isExpanded ? '▲' : '▼'}</span>
+        <span className="text-[10px] text-[#8A7A72]">{open ? '▲' : '▼'}</span>
       </button>
 
-      {isExpanded && (
-        <div className="mt-4 space-y-3 pl-11 border-t border-warm-gray pt-4">
-          {day.activities.length === 0 ? (
-            <p className="text-xs text-gray-400">No activities planned yet.</p>
-          ) : (
-            day.activities.map((activity, index) => (
-              <div key={index} className="flex gap-3">
-                {activity.time && (
-                  <span className="text-xs text-gray-400 w-14 shrink-0 pt-0.5 font-mono">
-                    {activity.time}
-                  </span>
-                )}
-                <div className="flex-1">
-                  <p className="text-sm font-medium text-gray-800">{activity.title}</p>
-                  {activity.description && (
-                    <p className="text-xs text-gray-500 mt-0.5 leading-relaxed">
-                      {activity.description}
-                    </p>
-                  )}
-                  {activity.location && (
-                    <p className="text-xs text-gray-400 mt-0.5">📍 {activity.location}</p>
-                  )}
-                  {activity.estimated_cost != null && (
-                    <p className="text-xs text-rose-gold mt-0.5 font-medium">
-                      ~${activity.estimated_cost}
-                    </p>
-                  )}
-                </div>
+      {open && (
+        <div className="mt-3 space-y-2 pl-9 border-t border-[#1E1B25] pt-3">
+          {PERIODS.map(({ key, label }) =>
+            day[key] ? (
+              <div key={key}>
+                <p className="text-[10px] font-medium text-[#8A7A72] mb-0.5">{label}</p>
+                <p className="text-[11px] text-[#F0ECE8] leading-relaxed">{day[key]}</p>
               </div>
-            ))
+            ) : null
           )}
         </div>
       )}

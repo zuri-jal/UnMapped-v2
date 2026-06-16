@@ -1,4 +1,5 @@
 import axios from 'axios'
+import { supabase } from './supabase'
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000'
 
@@ -7,73 +8,63 @@ const api = axios.create({
   headers: { 'Content-Type': 'application/json' },
 })
 
-// Attach the Supabase JWT to every outgoing request
 api.interceptors.request.use(async (config) => {
-  // TODO: Import supabase client and call supabase.auth.getSession()
-  // TODO: If session exists, set config.headers.Authorization = `Bearer ${session.access_token}`
+  const { data: { session } } = await supabase.auth.getSession()
+  if (session?.access_token) {
+    config.headers.Authorization = `Bearer ${session.access_token}`
+  }
   return config
 })
 
-// Global response error handling
 api.interceptors.response.use(
-  (response) => response,
-  (error) => {
-    if (error.response?.status === 401) {
-      // TODO: Import supabase and call supabase.auth.signOut()
-      // TODO: Redirect to the landing page using window.location or React Router
+  (res) => res,
+  (err) => {
+    if (err.response?.status === 401) {
+      supabase.auth.signOut()
+      window.location.href = '/auth'
     }
-    if (error.response?.status === 422) {
-      // Pydantic validation error — extract detail array for display
-      const details = error.response.data?.detail
+    if (err.response?.status === 422) {
+      const details = err.response.data?.detail
       if (Array.isArray(details)) {
-        const messages = details.map((d) => d.msg).join(', ')
-        error.message = `Validation error: ${messages}`
+        err.message = `Validation error: ${details.map((d) => d.msg).join(', ')}`
       }
     }
-    return Promise.reject(error)
+    return Promise.reject(err)
   }
 )
 
-/**
- * POST /plan
- * Send a natural-language trip planning message and receive a full PlanResponse.
- * @param {Object} payload - { user_id, message, origin?, destination?, departure_date?, budget?, currency?, travellers?, preferences? }
- * @returns {Promise<Object>} PlanResponse
- */
-export async function planTrip(payload) {
-  const { data } = await api.post('/plan', payload)
-  return data
+export async function planTrip(data) {
+  try {
+    const res = await api.post('/plan', data)
+    return { data: res.data, error: null }
+  } catch (err) {
+    return { data: null, error: err.message ?? 'Request failed' }
+  }
 }
 
-/**
- * POST /update
- * Apply a natural-language change instruction to an existing trip.
- * @param {Object} payload - { trip_id, user_id, message }
- * @returns {Promise<Object>} UpdateResponse
- */
-export async function updateTrip(payload) {
-  const { data } = await api.post('/update', payload)
-  return data
+export async function updateTrip(data) {
+  try {
+    const res = await api.post('/update', data)
+    return { data: res.data, error: null }
+  } catch (err) {
+    return { data: null, error: err.message ?? 'Request failed' }
+  }
 }
 
-/**
- * POST /confirm
- * Confirm and book the selected flight and hotel for a trip.
- * @param {Object} payload - { trip_id, user_id, selected_flight_id, selected_hotel_id, traveller_details }
- * @returns {Promise<Object>} ConfirmResponse with booking refs and pdf_url
- */
-export async function confirmTrip(payload) {
-  const { data } = await api.post('/confirm', payload)
-  return data
+export async function confirmTrip(data) {
+  try {
+    const res = await api.post('/confirm', data)
+    return { data: res.data, error: null }
+  } catch (err) {
+    return { data: null, error: err.message ?? 'Request failed' }
+  }
 }
 
-/**
- * POST /discover
- * Discover trending and community-recommended destinations.
- * @param {Object} payload - { query?, budget?, currency?, season?, region?, vibe? }
- * @returns {Promise<Object>} DiscoverResponse with list of DestinationCard objects
- */
-export async function discoverDestinations(payload) {
-  const { data } = await api.post('/discover', payload)
-  return data
+export async function getDiscovery(data = {}) {
+  try {
+    const res = await api.post('/discover', data)
+    return { data: res.data, error: null }
+  } catch (err) {
+    return { data: null, error: err.message ?? 'Request failed' }
+  }
 }
