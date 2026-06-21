@@ -1,13 +1,9 @@
 import React, { useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../services/supabase'
+import { useTrendingDestinations } from '../hooks/useTrendingDestinations'
 
-const DESTINATIONS = [
-  { name: 'Kyoto',     country: 'Japan',    score: 98, emoji: '⛩️' },
-  { name: 'Lisbon',    country: 'Portugal', score: 94, emoji: '🌊' },
-  { name: 'Medellín',  country: 'Colombia', score: 91, emoji: '🌸' },
-  { name: 'Tbilisi',   country: 'Georgia',  score: 89, emoji: '🏔️' },
-]
+const scoreLabel = (s) => s > 70 ? 'Fernweh' : s > 50 ? 'Wanderlust' : 'Interesting'
 
 const FEATURES = [
   {
@@ -44,6 +40,7 @@ const FEATURES = [
 
 export default function Landing() {
   const navigate = useNavigate()
+  const { destinations, loading } = useTrendingDestinations()
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -128,20 +125,33 @@ export default function Landing() {
 
         {/* Destination cards row */}
         <div className="relative z-10 flex gap-4 justify-center px-6 pb-16 flex-wrap">
-          {DESTINATIONS.map((d) => (
-            <div
-              key={d.name}
-              className="w-48 bg-[#0F0D12] border border-[#1E1B25] rounded-2xl p-4 hover:border-rose-gold/40 transition-colors cursor-pointer"
-            >
-              <div className="text-3xl mb-3">{d.emoji}</div>
-              <p className="font-semibold text-[#F0ECE8] text-sm">{d.name}</p>
-              <p className="text-xs text-[#8A7A72] mt-0.5">{d.country}</p>
-              <div className="mt-3 inline-flex items-center gap-1 px-2 py-0.5 bg-rose-gold/10 rounded-full">
-                <span className="text-[10px] font-semibold text-rose-gold">{d.score}</span>
-                <span className="text-[10px] text-[#8A7A72]">trending</span>
-              </div>
-            </div>
-          ))}
+          {loading
+            ? Array.from({ length: 4 }).map((_, i) => (
+                <div
+                  key={i}
+                  className="w-48 bg-[#0F0D12] border border-[#1E1B25] rounded-2xl p-4 animate-pulse"
+                >
+                  <div className="w-8 h-8 rounded-lg bg-[#1E1B25] mb-3" />
+                  <div className="h-3 w-24 rounded bg-[#1E1B25] mb-2" />
+                  <div className="h-2.5 w-16 rounded bg-[#1E1B25] mb-3" />
+                  <div className="h-4 w-20 rounded-full bg-[#1E1B25]" />
+                </div>
+              ))
+            : destinations.map((d) => (
+                <div
+                  key={d.destination}
+                  className="w-48 bg-[#0F0D12] border border-[#1E1B25] rounded-2xl p-4 hover:border-rose-gold/40 transition-colors cursor-pointer"
+                >
+                  <div className="text-3xl mb-3">🌍</div>
+                  <p className="font-semibold text-[#F0ECE8] text-sm">{d.destination}</p>
+                  <p className="text-xs text-[#8A7A72] mt-0.5">{d.country}</p>
+                  <div className="mt-3 inline-flex items-center gap-1 px-2 py-0.5 bg-rose-gold/10 rounded-full">
+                    <span className="text-[10px] font-semibold text-rose-gold">{d.score}</span>
+                    <span className="text-[10px] text-[#8A7A72]">· {scoreLabel(d.score)}</span>
+                  </div>
+                </div>
+              ))
+          }
         </div>
       </div>
 

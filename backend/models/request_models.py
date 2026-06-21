@@ -68,6 +68,7 @@ class ConfirmRequest(BaseModel):
 
 class DiscoverRequest(BaseModel):
     user_id: Optional[str] = None
+    destination: Optional[str] = Field(None, description="Specific destination name, e.g. 'Tokyo' — triggers destination-specific mode")
     query: Optional[str] = Field(None, description="Free-text query, e.g. 'beach destination in Asia'")
     budget: Optional[float] = Field(None, ge=0)
     currency: Optional[str] = "USD"

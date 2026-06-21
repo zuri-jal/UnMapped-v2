@@ -1,53 +1,114 @@
 import React, { useState } from 'react'
 import TripMap from './TripMap'
 import useTripStore from '../store/tripStore'
+import { useTrendingDestinations } from '../hooks/useTrendingDestinations'
 
-const DISC_TABS = ['For You', 'Trending', 'Food', 'Experiences']
+const DISC_TABS = ['Trending', 'Food', 'Experiences']
+
+const scoreLabel = (s) => s > 70 ? 'Fernweh' : s > 50 ? 'Wanderlust' : 'Interesting'
+
+const FOOD_DESTINATIONS = [
+  { destination: 'Bangkok',     country: 'Thailand' },
+  { destination: 'Tokyo',       country: 'Japan' },
+  { destination: 'Paris',       country: 'France' },
+  { destination: 'Lisbon',      country: 'Portugal' },
+  { destination: 'Mexico City', country: 'Mexico' },
+  { destination: 'Bologna',     country: 'Italy' },
+  { destination: 'Singapore',   country: 'Singapore' },
+  { destination: 'Istanbul',    country: 'Turkey' },
+]
+
+const EXPERIENCE_DESTINATIONS = [
+  { destination: 'Queenstown',  country: 'New Zealand' },
+  { destination: 'Bali',        country: 'Indonesia' },
+  { destination: 'Marrakech',   country: 'Morocco' },
+  { destination: 'Cape Town',   country: 'South Africa' },
+  { destination: 'Reykjavik',   country: 'Iceland' },
+  { destination: 'Cusco',       country: 'Peru' },
+  { destination: 'Banff',       country: 'Canada' },
+]
+
+function filterTrendingByTab(tab, destinations) {
+  if (tab === 'Trending') {
+    return [...destinations].filter(d => d.score > 70).sort((a, b) => b.score - a.score)
+  }
+  const curated = tab === 'Food' ? FOOD_DESTINATIONS : EXPERIENCE_DESTINATIONS
+  const names = new Set(curated.map(c => c.destination.toLowerCase()))
+  const matched = destinations.filter(d => names.has(d.destination?.toLowerCase()))
+  return matched.length > 0
+    ? matched
+    : curated.slice(0, 4).map(c => ({ ...c, score: 50 }))
+}
 
 function DiscoveryCard({ item }) {
-  const [liked, setLiked] = useState(false)
-  const hearts = item.hearts ?? Math.floor(Math.random() * 900) + 100
-
   return (
     <div className="shrink-0 w-40 bg-[#0F0D12] border border-[#1E1B25] rounded-xl p-3 hover:border-rose-gold/30 transition-colors">
       <div className="text-xl mb-2">{item.emoji ?? '🌍'}</div>
       <p className="text-xs font-semibold text-[#F0ECE8] truncate">{item.name ?? item.destination}</p>
       <p className="text-[10px] text-[#8A7A72] mt-0.5 truncate">{item.country ?? item.source ?? ''}</p>
-      <button
-        onClick={() => setLiked((v) => !v)}
-        className="flex items-center gap-1 mt-2 text-[10px] transition-colors"
-      >
-        <span className={liked ? 'text-rose-gold' : 'text-[#8A7A72]'}>♥</span>
-        <span className={liked ? 'text-rose-gold' : 'text-[#8A7A72]'}>{liked ? hearts + 1 : hearts}</span>
-      </button>
+      {item.score != null && (
+        <div className="mt-2 inline-flex items-center gap-1 px-2 py-0.5 bg-rose-gold/10 rounded-full">
+          <span className="text-[10px] font-semibold text-rose-gold">{item.score}</span>
+          <span className="text-[10px] text-[#8A7A72]">· {scoreLabel(item.score)}</span>
+        </div>
+      )}
     </div>
   )
 }
 
-const STATIC_DISCOVERY = [
-  { name: 'Tbilisi',   country: 'Georgia',   emoji: '🏔️', hearts: 1240 },
-  { name: 'Kotor',     country: 'Montenegro',emoji: '⚓',  hearts: 879 },
-  { name: 'Chefchaouen', country: 'Morocco', emoji: '💙',  hearts: 2100 },
-  { name: 'Plovdiv',   country: 'Bulgaria',  emoji: '🎨',  hearts: 634 },
-  { name: 'Luang Prabang', country: 'Laos',  emoji: '🛕',  hearts: 1560 },
-  { name: 'Valparaíso', country: 'Chile',    emoji: '🎭',  hearts: 988 },
-]
+const TYPE_META = {
+  restaurant: { emoji: '🍽️', label: 'restaurant' },
+  food:       { emoji: '🍜', label: 'food' },
+  activity:   { emoji: '🎯', label: 'activity' },
+  viewpoint:  { emoji: '🔭', label: 'viewpoint' },
+}
+
+function HiddenGemCard({ gem }) {
+  const meta = TYPE_META[gem.type] ?? { emoji: '✨', label: gem.type ?? 'gem' }
+  return (
+    <div className="shrink-0 w-40 bg-[#0F0D12] border border-[#1E1B25] rounded-xl p-3 hover:border-rose-gold/30 transition-colors">
+      <div className="flex items-center gap-1.5 mb-1.5">
+        <span className="text-base">{meta.emoji}</span>
+        <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-[#1E1B25] text-[#8A7A72] uppercase tracking-wide">
+          {meta.label}
+        </span>
+      </div>
+      <p className="text-xs font-semibold text-[#F0ECE8] truncate">{gem.name}</p>
+      {gem.description && (
+        <p className="text-[10px] text-[#8A7A72] mt-1 line-clamp-2 leading-tight">
+          {gem.description}
+        </p>
+      )}
+      {gem.source_quote && (
+        <p className="text-[9px] text-[#8A7A72]/70 mt-1.5 italic line-clamp-2 leading-tight">
+          &ldquo;{gem.source_quote}&rdquo;
+        </p>
+      )}
+      {gem.source && (
+        <p className="text-[8px] text-[#8A7A72]/50 mt-0.5">— via {gem.source}</p>
+      )}
+    </div>
+  )
+}
 
 export default function CenterPanel() {
   const { tripData, darkMode, toggleDarkMode } = useTripStore()
-  const [discTab, setDiscTab] = useState('For You')
+  const [discTab, setDiscTab] = useState('Trending')
+  const { destinations: trendingDestinations, loading: trendingLoading } = useTrendingDestinations()
 
-  const insights = tripData?.discovery_insights ?? []
-  const displayItems = insights.length > 0 ? insights : STATIC_DISCOVERY
+  const hiddenGems = tripData?.hidden_gems ?? []
+  const hasGems = hiddenGems.length > 0
 
-  // Filter by tab (use source or type field if available)
-  const filtered = displayItems.filter((item) => {
-    if (discTab === 'For You') return true
-    if (discTab === 'Trending') return item.source === 'google_trends' || !item.source
-    if (discTab === 'Food')     return item.source === 'reddit' || item.name?.toLowerCase().includes('food') || !item.source
-    if (discTab === 'Experiences') return item.source === 'youtube' || !item.source
-    return true
-  })
+  const filteredGems = hasGems
+    ? hiddenGems.filter((gem) => {
+        if (discTab === 'Trending') return true
+        if (discTab === 'Food') return gem.type === 'food' || gem.type === 'restaurant'
+        if (discTab === 'Experiences') return gem.type === 'activity' || gem.type === 'viewpoint'
+        return true
+      })
+    : filterTrendingByTab(discTab, trendingDestinations)
+
+  const displayItems = filteredGems.length > 0 ? filteredGems : (hasGems ? hiddenGems : trendingDestinations)
 
   const destination = tripData?.days?.[0]?.location
     ?? (typeof tripData?.destination === 'string' ? tripData.destination : '')
@@ -122,7 +183,7 @@ export default function CenterPanel() {
       </div>
 
       {/* Discovery section */}
-      <div className="shrink-0 border-t border-[#1E1B25] bg-[#0A0A0F]" style={{ maxHeight: '200px' }}>
+      <div className="shrink-0 border-t border-[#1E1B25] bg-[#0A0A0F]" style={{ maxHeight: '220px' }}>
         <div className="flex items-center gap-1 px-4 pt-3 pb-1">
           <span className="text-xs font-medium text-[#F0ECE8] mr-2">Discover hidden gems</span>
           {DISC_TABS.map((t) => (
@@ -142,9 +203,24 @@ export default function CenterPanel() {
 
         {/* Horizontal scroll cards */}
         <div className="flex gap-2 overflow-x-auto px-4 pb-3 pt-2 scrollbar-hide">
-          {(filtered.length > 0 ? filtered : STATIC_DISCOVERY).map((item, i) => (
-            <DiscoveryCard key={i} item={item} />
-          ))}
+          {!hasGems && trendingLoading
+            ? Array.from({ length: 5 }).map((_, i) => (
+                <div
+                  key={i}
+                  className="shrink-0 w-40 bg-[#0F0D12] border border-[#1E1B25] rounded-xl p-3 animate-pulse"
+                >
+                  <div className="w-6 h-6 rounded bg-[#1E1B25] mb-2" />
+                  <div className="h-2.5 w-24 rounded bg-[#1E1B25] mb-1.5" />
+                  <div className="h-2 w-16 rounded bg-[#1E1B25] mb-2" />
+                  <div className="h-3 w-12 rounded-full bg-[#1E1B25]" />
+                </div>
+              ))
+            : displayItems.map((item, i) =>
+                hasGems
+                  ? <HiddenGemCard key={i} gem={item} />
+                  : <DiscoveryCard key={i} item={item} />
+              )
+          }
         </div>
       </div>
 

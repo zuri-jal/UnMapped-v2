@@ -8,6 +8,7 @@ from services.nlp_service import extract_locations, extract_origin
 from services.openai_service import generate_itinerary
 from services.duffel_service import search_flights, search_hotels
 from services.supabase_service import get_user_profile
+from services.discovery_service import get_hidden_gems
 
 router = APIRouter()
 
@@ -46,7 +47,7 @@ async def plan_trip(request: TripRequest):
     check_out_date = str(request.departure_date + timedelta(days=request.duration_days))
 
     try:
-        result, flights, hotels = await asyncio.gather(
+        result, flights, hotels, hidden_gems = await asyncio.gather(
             generate_itinerary(request, locations),
             search_flights(
                 origin=origin,
@@ -62,10 +63,12 @@ async def plan_trip(request: TripRequest):
                 total_budget_usd=request.budget_usd,
                 duration_days=request.duration_days,
             ),
+            get_hidden_gems(destination),
         )
     except Exception as exc:
         raise HTTPException(status_code=502, detail=str(exc))
 
     result["flights"] = flights
     result["hotels"] = hotels
+    result["hidden_gems"] = hidden_gems
     return TripResponse(**result)

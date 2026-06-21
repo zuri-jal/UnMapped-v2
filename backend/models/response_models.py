@@ -2,6 +2,20 @@ from pydantic import BaseModel
 from typing import Any, Optional, List
 
 
+class HiddenGem(BaseModel):
+    name: str
+    type: str
+    description: str
+    source: str
+    source_quote: Optional[str] = None
+
+
+class TrendingDestination(BaseModel):
+    destination: str
+    country: str
+    score: int
+
+
 class DayItinerary(BaseModel):
     day: int
     date: str
@@ -27,6 +41,7 @@ class TripResponse(BaseModel):
     discovery_insights: List[Any] = []
     flights: List[Any] = []
     hotels: List[Any] = []
+    hidden_gems: List[HiddenGem] = []
 
 
 class ActivityModel(BaseModel):
@@ -110,5 +125,7 @@ class DestinationCard(BaseModel):
 
 
 class DiscoverResponse(BaseModel):
-    destinations: List[DestinationCard] = []
+    trending: List[TrendingDestination] = []
+    youtube_insights: Optional[dict] = None
+    trend_score: Optional[dict] = None
     message: Optional[str] = None

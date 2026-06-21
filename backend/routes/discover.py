@@ -1,24 +1,39 @@
-from fastapi import APIRouter, HTTPException
+import asyncio
+from fastapi import APIRouter, Request as StarletteRequest
 
 from models.request_models import DiscoverRequest
-from models.response_models import DiscoverResponse
+from models.response_models import DiscoverResponse, TrendingDestination
+from services.discovery_service import (
+    get_trending_destinations,
+    get_youtube_insights,
+    get_trending_score,
+)
 
 router = APIRouter()
 
 
 @router.post("/", response_model=DiscoverResponse)
-async def discover_destinations(request: DiscoverRequest):
-    """
-    Discovery endpoint — surfaces trending and community-recommended destinations.
+async def discover_destinations(raw: StarletteRequest, request: DiscoverRequest):
+    try:
+        body = await raw.json()
+    except Exception:
+        body = {}
+    print(f"[DEBUG /discover] raw body: {body}")
+    print(f"[DEBUG /discover] parsed request.query={request.query!r}  request.destination={request.destination!r}")
 
-    Steps:
-    1. Build a search query from request.query, region, vibe, and season
-    2. Call discovery_service.fetch_reddit_recommendations() for community posts
-    3. Call discovery_service.fetch_youtube_travel_content() for video recommendations
-    4. Call discovery_service.fetch_google_trends() for destination interest scores
-    5. Aggregate all sources — deduplicate by destination name
-    6. Call openai_service.rank_destinations() to score and add narrative summaries
-    7. Return DiscoverResponse with sorted DestinationCard list
-    """
-    # TODO: Implement discovery aggregation pipeline
-    raise HTTPException(status_code=501, detail="Not implemented yet")
+    destination = request.destination
+
+    if not destination:
+        trending_raw = await get_trending_destinations()
+        return DiscoverResponse(
+            trending=[TrendingDestination(**t) for t in trending_raw]
+        )
+
+    youtube_data, trend_data = await asyncio.gather(
+        get_youtube_insights(destination),
+        get_trending_score(destination),
+    )
+    return DiscoverResponse(
+        youtube_insights=youtube_data,
+        trend_score=trend_data,
+    )
