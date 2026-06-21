@@ -75,6 +75,27 @@ async def generate_itinerary(request, locations: list[str]) -> dict:
                 raise RuntimeError(f"OpenAI returned non-JSON after 2 attempts: {raw[:200]}")
 
 
+async def resolve_country_to_city(country: str) -> str | None:
+    try:
+        response = await client.chat.completions.create(
+            model=MODEL,
+            messages=[
+                {
+                    "role": "user",
+                    "content": (
+                        f"What is the single most popular city for international tourists in {country}? "
+                        "Reply with only the city name, nothing else."
+                    ),
+                }
+            ],
+            max_tokens=20,
+        )
+        city = response.choices[0].message.content.strip()
+        return city if city else None
+    except Exception:
+        return None
+
+
 async def refine_itinerary(existing_itinerary: dict, user_message: str) -> dict:
     """
     Merge a user's change request into an existing itinerary.

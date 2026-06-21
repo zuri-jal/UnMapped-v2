@@ -5,12 +5,35 @@ from fastapi import APIRouter, HTTPException
 from models.request_models import TripRequest
 from models.response_models import TripResponse
 from services.nlp_service import extract_locations, extract_origin
-from services.openai_service import generate_itinerary
+from services.openai_service import generate_itinerary, resolve_country_to_city
 from services.duffel_service import search_flights, search_hotels
 from services.supabase_service import get_user_profile
 from services.discovery_service import get_hidden_gems
 
 router = APIRouter()
+
+COUNTRY_TO_CITY: dict[str, str] = {
+    "indonesia": "Bali",
+    "japan": "Tokyo",
+    "thailand": "Bangkok",
+    "india": "Delhi",
+    "vietnam": "Ho Chi Minh City",
+    "malaysia": "Kuala Lumpur",
+    "philippines": "Manila",
+    "nepal": "Kathmandu",
+    "sri lanka": "Colombo",
+    "united arab emirates": "Dubai",
+    "uae": "Dubai",
+    "turkey": "Istanbul",
+    "egypt": "Cairo",
+    "australia": "Sydney",
+    "new zealand": "Auckland",
+    "south africa": "Johannesburg",
+    "brazil": "Sao Paulo",
+    "mexico": "Mexico City",
+    "greece": "Athens",
+    "south korea": "Seoul",
+}
 
 
 @router.post("/", response_model=TripResponse)
@@ -24,6 +47,17 @@ async def plan_trip(request: TripRequest):
         locations.insert(0, request.destination)
 
     destination = request.destination or (locations[-1] if locations else "")
+    if destination:
+        resolved = COUNTRY_TO_CITY.get(destination.lower())
+        if resolved:
+            destination = resolved
+        else:
+            try:
+                fallback = await resolve_country_to_city(destination)
+                if fallback:
+                    destination = fallback
+            except Exception:
+                pass
 
     # --- Three-tier origin fallback ---
 
