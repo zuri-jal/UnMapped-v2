@@ -2,7 +2,7 @@ import React from 'react'
 import useTripStore from '../store/tripStore'
 
 export default function BudgetTab() {
-  const { tripData, selectedFlightId, selectedHotelId } = useTripStore()
+  const { tripData, selectedFlightIds } = useTripStore()
 
   if (!tripData) {
     return (
@@ -13,30 +13,39 @@ export default function BudgetTab() {
     )
   }
 
-  const bb = tripData.budget_breakdown ?? {}
+  const bb     = tripData.budget_breakdown ?? {}
+  const cities = tripData.cities ?? []
 
-  // Override with selected flight/hotel actual prices
-  const selFlight = tripData.flights?.find((f) => (f.flight_number || '') === selectedFlightId)
-  const selHotel  = tripData.hotels?.find((h) => (h.name || '') === selectedHotelId)
-  const nights = tripData.days?.length ?? 7
+  const nights = cities.reduce((s, c) => s + (c.day_count ?? 0), 0) || tripData.days?.length || 7
 
-  const flightCost  = selFlight ? Number(selFlight.price_usd ?? 0) : Number(bb.flights ?? 0)
-  const hotelCost   = selHotel
-    ? Number(selHotel.price_per_night_usd ?? 0) * nights
-    : Number(bb.accommodation ?? 0)
-  const foodCost    = Number(bb.food ?? 0)
-  const transportCost = Number(bb.transport ?? 0)
+  // Flight cost: sum prices of all selected legs (fall back to budget_breakdown estimate)
+  const rawFlightCost = Object.values(selectedFlightIds ?? {}).reduce((sum, fId) => {
+    const f = (tripData.flights ?? []).find(
+      (fl) => (fl.flight_number || fl.offer_id || '') === fId
+    )
+    return sum + Number(f?.price_usd ?? 0)
+  }, 0)
+  const flightCost = rawFlightCost || Number(bb.flights ?? 0)
+
+  // Hotel cost: sum across all cities (one hotel per city × day_count)
+  const rawHotelCost = cities.reduce((sum, city) => {
+    return sum + Number(city.hotel?.price_per_night_usd ?? 0) * (city.day_count ?? 0)
+  }, 0)
+  const hotelCost = rawHotelCost || Number(bb.accommodation ?? 0)
+
+  const foodCost       = Number(bb.food ?? 0)
+  const transportCost  = Number(bb.transport ?? 0)
   const activitiesCost = Number(bb.activities ?? 0)
-  const total       = flightCost + hotelCost + foodCost + transportCost + activitiesCost
-  const budget      = Number(bb.total ?? total)
-  const pct         = budget > 0 ? Math.min((total / budget) * 100, 100) : 0
+  const total          = flightCost + hotelCost + foodCost + transportCost + activitiesCost
+  const budget         = Number(bb.total ?? total)
+  const pct            = budget > 0 ? Math.min((total / budget) * 100, 100) : 0
 
   const rows = [
-    { label: 'Flights',       amount: flightCost,    icon: '✈️' },
-    { label: `Hotel (${nights}n)`, amount: hotelCost, icon: '🏨' },
-    { label: 'Food',          amount: foodCost,       icon: '🍜' },
-    { label: 'Transport',     amount: transportCost,  icon: '🚌' },
-    { label: 'Activities',    amount: activitiesCost, icon: '🎭' },
+    { label: 'Flights',            amount: flightCost,    icon: '✈️' },
+    { label: `Hotels (${nights}n)`, amount: hotelCost,    icon: '🏨' },
+    { label: 'Food',               amount: foodCost,       icon: '🍜' },
+    { label: 'Transport',          amount: transportCost,  icon: '🚌' },
+    { label: 'Activities',         amount: activitiesCost, icon: '🎭' },
   ]
 
   return (

@@ -1,11 +1,13 @@
 import React from 'react'
 import useTripStore from '../store/tripStore'
 
-export default function FlightCard({ flight, index }) {
-  const { selectFlight, selectedFlightId } = useTripStore()
-  // Prefer flight_number; fall back to index string so selection still works
-  const id = flight.flight_number || `flight-${index}`
-  const isSelected = selectedFlightId === id
+export default function FlightCard({ flight, legKey, index }) {
+  const { selectFlight, selectedFlightIds } = useTripStore()
+
+  const id = flight.flight_number || flight.offer_id || `flight-${index}`
+  // legKey is provided by the parent group; derive a fallback from the flight itself
+  const effectiveLegKey = legKey ?? (flight.from && flight.to ? `${flight.from} → ${flight.to}` : 'default')
+  const isSelected = selectedFlightIds[effectiveLegKey] === id
 
   const stopCount = flight.stops ?? 0
   const stops = stopCount === 0 ? 'Nonstop' : `${stopCount} stop${stopCount > 1 ? 's' : ''}`
@@ -18,7 +20,7 @@ export default function FlightCard({ flight, index }) {
 
   return (
     <div
-      onClick={() => selectFlight(id)}
+      onClick={() => selectFlight(effectiveLegKey, id)}
       role="button"
       aria-pressed={isSelected}
       className={`card-dark cursor-pointer transition-all mb-2 ${

@@ -4,11 +4,24 @@ const _darkInit = (() => {
   try { return localStorage.getItem('unmapped-dark') !== 'false' } catch { return true }
 })()
 
+function calcTotal(tripData, flightIds) {
+  const cities  = tripData?.cities  ?? []
+  const flights = tripData?.flights ?? []
+  const flightCost = Object.values(flightIds).reduce((sum, fId) => {
+    const f = flights.find((fl) => (fl.flight_number || fl.offer_id || '') === fId)
+    return sum + Number(f?.price_usd ?? 0)
+  }, 0)
+  const hotelCost = cities.reduce((sum, city) => {
+    return sum + Number(city.hotel?.price_per_night_usd ?? 0) * (city.day_count ?? 0)
+  }, 0)
+  return flightCost + hotelCost
+}
+
 const useTripStore = create((set) => ({
   tripData: null,
   messages: [],
-  selectedFlightId: null,
-  selectedHotelId: null,
+  // Per-leg flight selection: { "City A → City B": "flightIdentifier" }
+  selectedFlightIds: {},
   totalCost: 0,
   isLoading: false,
   isConfirming: false,
@@ -16,30 +29,44 @@ const useTripStore = create((set) => ({
   pendingQuery: null,
 
   setTripData: (tripData) =>
-    set({ tripData, selectedFlightId: null, selectedHotelId: null, totalCost: 0 }),
+    set({ tripData, selectedFlightIds: {}, totalCost: 0 }),
 
   addMessage: (role, content) =>
     set((s) => ({ messages: [...s.messages, { role, content }] })),
 
-  selectFlight: (id) =>
+  selectFlight: (legKey, id) =>
     set((s) => {
-      const flight = s.tripData?.flights?.find((f) => (f.flight_number || '') === id)
-      const hotel  = s.tripData?.hotels?.find((h) => (h.name || '') === s.selectedHotelId)
-      const nights = s.tripData?.days?.length ?? 7
-      const totalCost =
-        Number(flight?.price_usd ?? 0) + Number(hotel?.price_per_night_usd ?? 0) * nights
-      return { selectedFlightId: id, totalCost }
+      const newIds = { ...s.selectedFlightIds, [legKey]: id }
+      return { selectedFlightIds: newIds, totalCost: calcTotal(s.tripData, newIds) }
     }),
 
-  selectHotel: (id) =>
+  reorderCities: (fromIdx, toIdx) =>
     set((s) => {
-      const flight = s.tripData?.flights?.find((f) => (f.flight_number || '') === s.selectedFlightId)
-      const hotel  = s.tripData?.hotels?.find((h) => (h.name || '') === id)
-      const nights = s.tripData?.days?.length ?? 7
-      const totalCost =
-        Number(flight?.price_usd ?? 0) + Number(hotel?.price_per_night_usd ?? 0) * nights
-      return { selectedHotelId: id, totalCost }
+      if (!s.tripData?.cities) return {}
+      const cities = [...s.tripData.cities]
+      const [moved] = cities.splice(fromIdx, 1)
+      cities.splice(toIdx, 0, moved)
+      return { tripData: { ...s.tripData, cities } }
     }),
+
+  removeCity: (idx) =>
+    set((s) => {
+      if (!s.tripData?.cities) return {}
+      const cities = s.tripData.cities.filter((_, i) => i !== idx)
+      return { tripData: { ...s.tripData, cities } }
+    }),
+
+  updateCityDayCount: (idx, count) =>
+    set((s) => {
+      if (!s.tripData?.cities) return {}
+      const cities = s.tripData.cities.map((c, i) =>
+        i === idx ? { ...c, day_count: Math.max(1, count) } : c
+      )
+      return { tripData: { ...s.tripData, cities } }
+    }),
+
+  setCities: (cities) =>
+    set((s) => ({ tripData: { ...s.tripData, cities } })),
 
   setLoading:    (v) => set({ isLoading: v }),
   setConfirming: (v) => set({ isConfirming: v }),
@@ -59,8 +86,7 @@ const useTripStore = create((set) => ({
       messages: [],
       isLoading: false,
       isConfirming: false,
-      selectedFlightId: null,
-      selectedHotelId: null,
+      selectedFlightIds: {},
       totalCost: 0,
     }),
 }))

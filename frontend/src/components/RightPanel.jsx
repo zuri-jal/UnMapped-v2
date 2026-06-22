@@ -10,10 +10,24 @@ const TABS = ['Itinerary', 'Flights', 'Hotels', 'Budget']
 
 export default function RightPanel() {
   const navigate = useNavigate()
-  const { tripData, selectedFlightId, selectedHotelId, totalCost } = useTripStore()
+  const { tripData, selectedFlightIds, totalCost } = useTripStore()
   const [active, setActive] = useState('Itinerary')
 
-  const canConfirm   = !!selectedFlightId && !!selectedHotelId
+  const cities = tripData?.cities ?? []
+
+  // Group flights[] by leg (from → to), preserving sequential backend order
+  const flightLegs = (() => {
+    const map = new Map()
+    for (const f of (tripData?.flights ?? [])) {
+      const key = f.from && f.to ? `${f.from} → ${f.to}` : 'Unknown leg'
+      if (!map.has(key)) map.set(key, [])
+      map.get(key).push(f)
+    }
+    return [...map.entries()]
+  })()
+
+  // Can confirm when at least one flight leg is selected (hotels are one-per-city, always included)
+  const canConfirm   = Object.keys(selectedFlightIds ?? {}).length > 0
   const totalDisplay = totalCost > 0 ? totalCost.toLocaleString() : '—'
 
   return (
@@ -40,35 +54,63 @@ export default function RightPanel() {
       <div className="flex-1 overflow-y-auto px-3 py-3 min-h-0">
         {active === 'Itinerary' && <ItineraryTab />}
 
-        {active === 'Flights' && (() => {
-          const flights = Array.isArray(tripData?.flights) ? tripData.flights : []
-          return flights.length ? (
-            flights.map((f, i) => <FlightCard key={f.flight_number ?? i} flight={f} index={i} />)
-          ) : (
-            <div className="text-center text-[#8A7A72] py-10">
-              <div className="text-3xl mb-2">✈</div>
-              <p className="text-xs font-medium text-[#F0ECE8]">No flights available</p>
-              <p className="text-[10px] mt-1">
-                {tripData ? 'No flight results were returned for this route.' : 'Plan a trip to see flight options.'}
-              </p>
-            </div>
-          )
-        })()}
+        {active === 'Flights' && (
+          <div className="space-y-5">
+            {flightLegs.length ? (
+              flightLegs.map(([legKey, legFlights]) => (
+                <div key={legKey}>
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="text-[9px] font-semibold text-[#8A7A72] uppercase tracking-wider whitespace-nowrap">
+                      ✈ {legKey}
+                    </span>
+                    <div className="h-px flex-1 bg-[#1E1B25]" />
+                  </div>
+                  {legFlights.map((f, i) => (
+                    <FlightCard key={f.flight_number ?? f.offer_id ?? i} flight={f} legKey={legKey} index={i} />
+                  ))}
+                </div>
+              ))
+            ) : (
+              <div className="text-center text-[#8A7A72] py-10">
+                <div className="text-3xl mb-2">✈</div>
+                <p className="text-xs font-medium text-[#F0ECE8]">No flights available</p>
+                <p className="text-[10px] mt-1">
+                  {tripData ? 'No flight results were returned for this route.' : 'Plan a trip to see flight options.'}
+                </p>
+              </div>
+            )}
+          </div>
+        )}
 
-        {active === 'Hotels' && (() => {
-          const hotels = Array.isArray(tripData?.hotels) ? tripData.hotels : []
-          return hotels.length ? (
-            hotels.map((h, i) => <HotelCard key={h.name ?? i} hotel={h} index={i} />)
-          ) : (
-            <div className="text-center text-[#8A7A72] py-10">
-              <div className="text-3xl mb-2">🏨</div>
-              <p className="text-xs font-medium text-[#F0ECE8]">No hotels available</p>
-              <p className="text-[10px] mt-1">
-                {tripData ? 'No hotel results were returned for this destination.' : 'Plan a trip to see hotel options.'}
-              </p>
-            </div>
-          )
-        })()}
+        {active === 'Hotels' && (
+          <div className="space-y-5">
+            {cities.length ? (
+              cities.map((city, ci) => (
+                <div key={ci}>
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="text-[9px] font-semibold text-[#8A7A72] uppercase tracking-wider whitespace-nowrap">
+                      {city.name}{city.country ? `, ${city.country}` : ''}
+                    </span>
+                    <div className="h-px flex-1 bg-[#1E1B25]" />
+                  </div>
+                  {city.hotel ? (
+                    <HotelCard hotel={city.hotel} cityName={city.name} index={ci} />
+                  ) : (
+                    <p className="text-[10px] text-[#8A7A72]">No hotel found for {city.name}.</p>
+                  )}
+                </div>
+              ))
+            ) : (
+              <div className="text-center text-[#8A7A72] py-10">
+                <div className="text-3xl mb-2">🏨</div>
+                <p className="text-xs font-medium text-[#F0ECE8]">No hotels available</p>
+                <p className="text-[10px] mt-1">
+                  {tripData ? 'No hotel results were returned.' : 'Plan a trip to see hotel options.'}
+                </p>
+              </div>
+            )}
+          </div>
+        )}
 
         {active === 'Budget' && <BudgetTab />}
       </div>
@@ -86,7 +128,7 @@ export default function RightPanel() {
         >
           {canConfirm
             ? `Confirm trip · $${totalDisplay}`
-            : 'Select a flight & hotel'}
+            : 'Select a flight to continue'}
         </button>
       </div>
 

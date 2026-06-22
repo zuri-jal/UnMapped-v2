@@ -44,11 +44,19 @@ Required JSON schema (fill every field):
 """
 
 
-async def generate_itinerary(request, locations: list[str]) -> dict:
+async def generate_itinerary(
+    request,
+    locations: list[str],
+    day_counts: list[int] | None = None,
+) -> dict:
     n = len(locations)
-    base = request.duration_days // n if n else request.duration_days
-    remainder = request.duration_days % n if n else 0
-    day_counts = [base + (1 if i < remainder else 0) for i in range(n)]
+    if day_counts is None:
+        # Auto-distribute evenly — used by the NLP detection path (no confirmed_cities)
+        base = request.duration_days // n if n else request.duration_days
+        remainder = request.duration_days % n if n else 0
+        day_counts = [base + (1 if i < remainder else 0) for i in range(n)]
+    # Explicit day_counts are used as-is (confirmed_cities path — no redistribution)
+    total_days = sum(day_counts)
 
     day_cursor = 1
     city_lines = []
@@ -58,7 +66,7 @@ async def generate_itinerary(request, locations: list[str]) -> dict:
         day_cursor = end_day + 1
 
     first_city = locations[0] if locations else "unknown"
-    last_city = locations[-1] if locations else "unknown"
+    last_city  = locations[-1] if locations else "unknown"
 
     user_prompt = (
         f"Plan a trip with these details:\n"
@@ -68,11 +76,11 @@ async def generate_itinerary(request, locations: list[str]) -> dict:
         f"  Do NOT describe travel back to any earlier city at any point.\n"
         f"  The final day must be set in {last_city} and reflect departure FROM {last_city}.\n"
         f"- Departure date: {request.departure_date}\n"
-        f"- Duration: {request.duration_days} days\n"
+        f"- Duration: {total_days} days\n"
         f"- Budget: ${request.budget_usd:.0f} USD total for {request.travelers} traveler(s)\n"
         f"- Travel style: {request.travel_style}\n"
         f"- User message: {request.user_message}\n\n"
-        f"Generate a complete {request.duration_days}-day itinerary starting on {request.departure_date}."
+        f"Generate a complete {total_days}-day itinerary starting on {request.departure_date}."
     )
 
     messages = [

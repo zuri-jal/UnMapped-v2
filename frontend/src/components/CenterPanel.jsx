@@ -110,7 +110,8 @@ export default function CenterPanel() {
 
   const displayItems = filteredGems.length > 0 ? filteredGems : (hasGems ? hiddenGems : trendingDestinations)
 
-  const destination = tripData?.days?.[0]?.location
+  const destination = tripData?.cities?.[0]?.name
+    ?? tripData?.days?.[0]?.location
     ?? (typeof tripData?.destination === 'string' ? tripData.destination : '')
 
   const summaryFirst = tripData?.summary ? tripData.summary.split('.')[0].trim() : null
@@ -132,11 +133,15 @@ export default function CenterPanel() {
               >
                 {tripLabel}
               </span>
-              {tripData?.days?.length && (
-                <span className="text-[10px] px-2 py-0.5 bg-[#0F0D12] border border-[#1E1B25] rounded-full text-[#8A7A72]">
-                  {tripData.days.length} days
-                </span>
-              )}
+              {(() => {
+                const days = tripData?.cities?.reduce((s, c) => s + (c.day_count ?? 0), 0)
+                  || tripData?.days?.length
+                return days ? (
+                  <span className="text-[10px] px-2 py-0.5 bg-[#0F0D12] border border-[#1E1B25] rounded-full text-[#8A7A72]">
+                    {days} days
+                  </span>
+                ) : null
+              })()}
             </>
           ) : destination ? (
             <span className="text-sm font-semibold text-[#F0ECE8] truncate max-w-[200px]">

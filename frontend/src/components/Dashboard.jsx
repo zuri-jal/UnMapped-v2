@@ -5,30 +5,49 @@ import FlightCard from './FlightCard'
 import HotelCard from './HotelCard'
 import TransportTab from './TransportTab'
 import BudgetTab from './BudgetTab'
+import CityEditor from './CityEditor'
 import useTripStore from '../store/tripStore'
 
-const TABS = ['Itinerary', 'Flights', 'Hotels', 'Transport', 'Budget']
+const TABS = ['Itinerary', 'Flights', 'Hotels', 'Cities', 'Transport', 'Budget']
 
-// Right panel — map at the top, tabbed content below
+// TODO: Add Share Trip button that generates a shareable link via Supabase short URLs
+// TODO: Add Export PDF button that calls POST /confirm with pdf_only=true flag
+// TODO: Add inline edit for destination name / dates in the trip header
+
 export default function Dashboard() {
   const [activeTab, setActiveTab] = useState('Itinerary')
-  const { trip } = useTripStore()
+  const { tripData } = useTripStore()
 
-  // TODO: Add Share Trip button that generates a shareable link via Supabase short URLs
-  // TODO: Add Export PDF button that calls POST /confirm with pdf_only=true flag
-  // TODO: Add inline edit for destination name / dates in the trip header
+  const cities    = tripData?.cities ?? []
+  const totalDays = cities.reduce((s, c) => s + (c.day_count ?? 0), 0) || tripData?.days?.length
+
+  // Group flights[] by leg (from → to), preserving the sequential order from the backend
+  const flightLegs = (() => {
+    const map = new Map()
+    for (const f of (tripData?.flights ?? [])) {
+      const key = f.from && f.to ? `${f.from} → ${f.to}` : 'Unknown leg'
+      if (!map.has(key)) map.set(key, [])
+      map.get(key).push(f)
+    }
+    return [...map.entries()]   // [[legKey, [flightOffers]], ...]
+  })()
+
+  // Header title: for multi-city, join city names; for single, use destination field
+  const headerTitle =
+    cities.length > 1
+      ? cities.map((c) => c.name).join(' · ')
+      : (tripData?.destination ?? 'Your Trip')
 
   return (
     <div className="flex flex-col h-full">
       {/* Trip header */}
       <div className="flex items-start justify-between px-6 py-5 border-b border-warm-gray">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">
-            {trip?.destination ?? 'Your Trip'}
-          </h1>
+          <h1 className="text-2xl font-bold text-gray-900">{headerTitle}</h1>
           <p className="text-sm text-gray-500 mt-0.5">
-            {trip?.departure_date} → {trip?.return_date}
-            {trip?.days?.length ? ` · ${trip.days.length} days` : ''}
+            {tripData?.departure_date} → {tripData?.return_date}
+            {totalDays ? ` · ${totalDays} days` : ''}
+            {cities.length > 1 ? ` · ${cities.length} cities` : ''}
           </p>
         </div>
         {/* TODO: Add share / export actions */}
@@ -61,10 +80,25 @@ export default function Dashboard() {
         {activeTab === 'Itinerary' && <ItineraryTab />}
 
         {activeTab === 'Flights' && (
-          <div className="space-y-4">
-            {trip?.flights?.length ? (
-              trip.flights.map((flight) => (
-                <FlightCard key={flight.offer_id} flight={flight} />
+          <div className="space-y-6">
+            {flightLegs.length ? (
+              flightLegs.map(([legKey, legFlights]) => (
+                <div key={legKey}>
+                  <div className="flex items-center gap-2 mb-3">
+                    <span className="text-[10px] font-semibold text-[#8A7A72] uppercase tracking-wider whitespace-nowrap">
+                      ✈ {legKey}
+                    </span>
+                    <div className="h-px flex-1 bg-[#1E1B25]" />
+                  </div>
+                  {legFlights.map((flight, i) => (
+                    <FlightCard
+                      key={flight.offer_id ?? flight.flight_number ?? i}
+                      flight={flight}
+                      legKey={legKey}
+                      index={i}
+                    />
+                  ))}
+                </div>
               ))
             ) : (
               <p className="text-sm text-gray-400">No flights found yet.</p>
@@ -73,10 +107,22 @@ export default function Dashboard() {
         )}
 
         {activeTab === 'Hotels' && (
-          <div className="space-y-4">
-            {trip?.hotels?.length ? (
-              trip.hotels.map((hotel) => (
-                <HotelCard key={hotel.offer_id} hotel={hotel} />
+          <div className="space-y-6">
+            {cities.length ? (
+              cities.map((city, ci) => (
+                <div key={ci}>
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="text-[10px] font-semibold text-[#8A7A72] uppercase tracking-wider whitespace-nowrap">
+                      {city.name}{city.country ? `, ${city.country}` : ''}
+                    </span>
+                    <div className="h-px flex-1 bg-[#1E1B25]" />
+                  </div>
+                  {city.hotel ? (
+                    <HotelCard hotel={city.hotel} cityName={city.name} index={ci} />
+                  ) : (
+                    <p className="text-xs text-[#8A7A72]">No hotel found for {city.name}.</p>
+                  )}
+                </div>
               ))
             ) : (
               <p className="text-sm text-gray-400">No hotels found yet.</p>
@@ -84,8 +130,9 @@ export default function Dashboard() {
           </div>
         )}
 
+        {activeTab === 'Cities'    && <CityEditor />}
         {activeTab === 'Transport' && <TransportTab />}
-        {activeTab === 'Budget' && <BudgetTab />}
+        {activeTab === 'Budget'    && <BudgetTab />}
       </div>
     </div>
   )

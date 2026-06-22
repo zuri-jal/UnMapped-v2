@@ -4,60 +4,19 @@ from fastapi import APIRouter, HTTPException
 
 from models.request_models import TripRequest
 from models.response_models import CityItinerary, TripResponse
-from services.nlp_service import extract_locations, extract_origin, split_compound_location
-from services.openai_service import generate_itinerary, resolve_country_to_city, select_cities_for_country
+from services.nlp_service import extract_origin
+from services.openai_service import generate_itinerary
 from services.duffel_service import search_flights, search_hotels
 from services.supabase_service import get_user_profile
 from services.discovery_service import get_hidden_gems
+from utils.city_detection import detect_cities, distribute_days, extract_country, lookup_country
 
 router = APIRouter()
-
-COUNTRY_TO_CITY: dict[str, str] = {
-    "indonesia": "Bali",
-    "japan": "Tokyo",
-    "thailand": "Bangkok",
-    "india": "Delhi",
-    "vietnam": "Ho Chi Minh City",
-    "malaysia": "Kuala Lumpur",
-    "philippines": "Manila",
-    "nepal": "Kathmandu",
-    "sri lanka": "Colombo",
-    "united arab emirates": "Dubai",
-    "uae": "Dubai",
-    "turkey": "Istanbul",
-    "egypt": "Cairo",
-    "australia": "Sydney",
-    "new zealand": "Auckland",
-    "south africa": "Johannesburg",
-    "brazil": "Sao Paulo",
-    "mexico": "Mexico City",
-    "greece": "Athens",
-    "south korea": "Seoul",
-}
-
-_KNOWN_COUNTRIES = set(COUNTRY_TO_CITY.keys())
-
-
-def _distribute_days(total_days: int, num_cities: int) -> list[int]:
-    base = total_days // num_cities
-    remainder = total_days % num_cities
-    return [base + (1 if i < remainder else 0) for i in range(num_cities)]
-
-
-def _extract_country(location_str: str) -> str:
-    parts = location_str.split(",", 1)
-    return parts[1].strip() if len(parts) > 1 else ""
 
 
 @router.post("/", response_model=TripResponse)
 async def plan_trip(request: TripRequest):
-    nlp_locations = extract_locations(request.user_message)
-
-    locations = list(nlp_locations)
-    if request.destination and request.destination not in locations:
-        locations.insert(0, request.destination)
-
-    # --- Three-tier origin fallback ---
+    # --- Three-tier origin fallback (unchanged) ---
     origin: str | None = request.origin or None
     if not origin and request.user_id:
         profile = await get_user_profile(request.user_id)
@@ -68,48 +27,24 @@ async def plan_trip(request: TripRequest):
     if not origin:
         raise HTTPException(status_code=400, detail="Please provide your departure city")
 
-    # --- Detect input case and build city list ---
-    # Remove origin from destination candidates
-    dest_locs = [loc for loc in locations if loc.lower() != origin.lower()]
-
-    country_name: str | None = None
-    city_names: list[str] = []
-
-    if request.destination:
-        raw = request.destination
-        if raw.lower() in _KNOWN_COUNTRIES:
-            country_name = raw        # Case 3: explicit country override
-        else:
-            city_names = split_compound_location(raw)  # split "Bali and Yogyakarta" → ['Bali', 'Yogyakarta']
-    elif len(dest_locs) >= 2:
-        city_names = dest_locs        # Case 2: multiple NLP-detected cities
-    elif len(dest_locs) == 1:
-        single = dest_locs[0]
-        if single.lower() in _KNOWN_COUNTRIES:
-            country_name = single     # Case 3: single country from NLP
-        else:
-            city_names = [single]     # Case 1: single city from NLP
+    # --- City resolution: use pre-confirmed list or run Case 1/2/3 detection ---
+    if request.confirmed_cities:
+        # Pre-confirmed / edit-and-regenerate path: skip all NLP/OpenAI detection.
+        # Works identically whether this is the first generation or a re-generation
+        # after the user has edited cities — no special-casing between the two cases.
+        city_names   = [c.name for c in request.confirmed_cities]
+        day_counts   = [c.day_count for c in request.confirmed_cities]
+        country_name = None   # inferred per-city from itinerary output below
     else:
-        raise HTTPException(status_code=400, detail="Please specify a destination")
-
-    # Case 3: country only — ask OpenAI to select representative cities
-    if country_name and not city_names:
-        city_names = await select_cities_for_country(country_name, request.duration_days)
-        if not city_names:
-            # Fallback to single representative city (hardcoded map, then OpenAI resolver)
-            single = COUNTRY_TO_CITY.get(country_name.lower())
-            if not single:
-                single = await resolve_country_to_city(country_name)
-            city_names = [single] if single else []
-        if not city_names:
-            raise HTTPException(status_code=400, detail=f"Could not determine cities for {country_name}")
-
-    if not city_names:
-        raise HTTPException(status_code=400, detail="Please specify a destination")
+        # Standard NLP path: Case 1/2/3 detection (unchanged behaviour)
+        city_names, day_counts, country_name = await detect_cities(
+            user_message=request.user_message,
+            destination=request.destination,
+            origin=origin,
+            duration_days=request.duration_days,
+        )
 
     # --- Distribute days and build per-city date ranges ---
-    day_counts = _distribute_days(request.duration_days, len(city_names))
-
     city_start_dates: list[date] = []
     cur = request.departure_date
     for dc in day_counts:
@@ -133,7 +68,7 @@ async def plan_trip(request: TripRequest):
 
     # One leg: origin→city[0], then city[0]→city[1], etc.
     flight_froms = [origin] + city_names[:-1]
-    flight_tos = city_names
+    flight_tos   = city_names
     flight_dates = [str(request.departure_date)] + [str(d) for d in city_start_dates[1:]]
 
     flight_tasks = [
@@ -146,9 +81,14 @@ async def plan_trip(request: TripRequest):
         for i in range(n)
     ]
 
+    # Pass explicit day_counts when confirmed_cities is set so generate_itinerary
+    # respects them exactly instead of redistributing via duration_days // n.
+    # When confirmed_cities is absent, day_counts=None triggers the auto-distribution.
+    itinerary_day_counts = day_counts if request.confirmed_cities else None
+
     try:
         gathered = await asyncio.gather(
-            generate_itinerary(request, city_names),
+            generate_itinerary(request, city_names, day_counts=itinerary_day_counts),
             *hotel_tasks,
             *flight_tasks,
             get_hidden_gems(city_names[0]),
@@ -161,30 +101,31 @@ async def plan_trip(request: TripRequest):
     if isinstance(itinerary_result, Exception):
         raise HTTPException(status_code=502, detail=str(itinerary_result))
 
-    hotel_results = gathered[1:1 + n]
-    flight_results = gathered[1 + n:1 + 2 * n]
-    hidden_gems_raw = gathered[1 + 2 * n]
-    hidden_gems = hidden_gems_raw if not isinstance(hidden_gems_raw, Exception) else []
+    hotel_results      = gathered[1:1 + n]
+    flight_results     = gathered[1 + n:1 + 2 * n]
+    hidden_gems_raw    = gathered[1 + 2 * n]
+    hidden_gems        = hidden_gems_raw if not isinstance(hidden_gems_raw, Exception) else []
 
     # --- Slice itinerary days into per-city blocks ---
-    all_days = itinerary_result.get("days", [])
+    all_days   = itinerary_result.get("days", [])
     day_offset = 0
     city_itineraries: list[CityItinerary] = []
 
     for i, city in enumerate(city_names):
-        city_days = all_days[day_offset: day_offset + day_counts[i]]
+        city_days  = all_days[day_offset: day_offset + day_counts[i]]
         day_offset += day_counts[i]
 
         hotels_list = hotel_results[i] if not isinstance(hotel_results[i], Exception) else []
-        hotel = hotels_list[0] if hotels_list else None
+        hotel       = hotels_list[0] if hotels_list else None
 
-        # Infer country: known for Case 3; parse from day location field for Cases 1/2
+        # Infer country: known for Case 3; parse from itinerary output for Cases 1/2,
+        # with CITY_TO_COUNTRY as a fallback if the itinerary text doesn't carry it.
         if country_name:
             inferred_country = country_name
         elif city_days:
-            inferred_country = _extract_country(city_days[0].get("location", ""))
+            inferred_country = extract_country(city_days[0].get("location", "")) or lookup_country(city)
         else:
-            inferred_country = ""
+            inferred_country = lookup_country(city)
 
         city_itineraries.append(CityItinerary(
             name=city,
@@ -201,7 +142,7 @@ async def plan_trip(request: TripRequest):
         if isinstance(offers, Exception) or not offers:
             flat_flights.append({
                 "from": flight_froms[i],
-                "to": flight_tos[i],
+                "to":   flight_tos[i],
                 "unavailable": True,
             })
             continue

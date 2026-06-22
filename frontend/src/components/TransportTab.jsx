@@ -3,14 +3,16 @@ import useTripStore from '../store/tripStore'
 
 // Transport tab — local transport options for the destination
 export default function TransportTab() {
-  const { trip } = useTripStore()
+  const { tripData } = useTripStore()
 
   // TODO: Fetch airport transfer options with estimated prices (use Duffel transfers API)
   // TODO: Show inter-city rail / bus options if it's a multi-city trip
   // TODO: Add car rental suggestions via Duffel car rental endpoint
   // TODO: Fetch public transport tips from openai_service based on destination
 
-  const destination = trip?.destination ?? 'your destination'
+  const destination = tripData?.destination
+    ?? tripData?.cities?.map((c) => c.name).join(', ')
+    ?? 'your destination'
 
   return (
     <div>

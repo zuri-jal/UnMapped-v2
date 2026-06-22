@@ -15,6 +15,13 @@ const COORDS = {
   'kuala lumpur': [3.139, 101.6869], 'jakarta': [-6.2088, 106.8456],
   'manila': [14.5995, 120.9842], 'ho chi minh city': [10.8231, 106.6297],
   'hanoi': [21.0278, 105.8342], 'phuket': [7.8804, 98.3923],
+  'da nang': [16.0544, 108.2022], 'hoi an': [15.8801, 108.338],
+  'hue': [16.4637, 107.5909], 'nha trang': [12.2388, 109.1967],
+  'siem reap': [13.3633, 103.856], 'phnom penh': [11.5625, 104.916],
+  'yangon': [16.8661, 96.1951], 'luang prabang': [19.8845, 102.1348],
+  'vientiane': [17.9757, 102.6331],
+  'yogyakarta': [-7.7972, 110.3688], 'surabaya': [-7.2575, 112.7521],
+  'bandung': [-6.9175, 107.6191], 'lombok': [-8.6506, 116.3249],
   'delhi': [28.6139, 77.209], 'mumbai': [19.076, 72.8777],
   'dubai': [25.2048, 55.2708], 'istanbul': [41.0082, 28.9784],
   'rome': [41.9028, 12.4964], 'milan': [45.4654, 9.1859],
@@ -59,21 +66,41 @@ export default function TripMap({ darkMode = true }) {
   const { tripData } = useTripStore()
 
   const points = useMemo(() => {
-    if (!tripData?.days) return []
     const seen = new Set()
-    return tripData.days
-      .map((d) => ({ location: d.location, coords: resolveCoords(d.location) }))
-      .filter((p) => {
+    const dedupe = (arr) =>
+      arr.filter((p) => {
         if (!p.coords) return false
         const key = p.coords.join(',')
         if (seen.has(key)) return false
         seen.add(key)
         return true
       })
+
+    // Prefer new cities[] shape — one pin per city in route order
+    if (tripData?.cities?.length) {
+      return dedupe(
+        tripData.cities.map((city) => ({
+          location: city.name,
+          coords: resolveCoords(city.name),
+        }))
+      )
+    }
+
+    // Fallback: old flat days[].location shape
+    if (tripData?.days?.length) {
+      return dedupe(
+        tripData.days.map((d) => ({
+          location: d.location,
+          coords: resolveCoords(d.location),
+        }))
+      )
+    }
+
+    return []
   }, [tripData])
 
   const center = points[0]?.coords ?? [20, 0]
-  const zoom   = points.length > 0 ? (points.length === 1 ? 10 : 5) : 2
+  const zoom   = points.length > 1 ? 5 : points.length === 1 ? 10 : 2
 
   return (
     <MapContainer

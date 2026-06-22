@@ -3,6 +3,11 @@ from typing import Optional, List
 from datetime import date
 
 
+class ConfirmedCity(BaseModel):
+    name: str
+    day_count: int = Field(..., ge=1)
+
+
 class TripRequest(BaseModel):
     user_id: Optional[str] = Field(None, description="Supabase user UUID — used for profile-based origin lookup")
     origin: Optional[str] = Field(None, description="Departure city or IATA code — overrides profile and NLP fallbacks")
@@ -13,6 +18,17 @@ class TripRequest(BaseModel):
     travelers: int = Field(1, ge=1)
     travel_style: str
     user_message: str
+    confirmed_cities: Optional[List[ConfirmedCity]] = Field(
+        None,
+        description="Pre-confirmed city list from /resolve-cities. When provided, skips all city detection (Case 1/2/3) and uses these cities directly.",
+    )
+
+
+class ResolveCitiesRequest(BaseModel):
+    user_message: str
+    destination: Optional[str] = None
+    origin: Optional[str] = None
+    duration_days: int = Field(..., ge=1)
 
 
 class PlanRequest(BaseModel):

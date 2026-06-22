@@ -53,6 +53,16 @@ class TripResponse(BaseModel):
     suggested_route_order: Optional[List[str]] = None
 
 
+class CityItem(BaseModel):
+    name: str
+    country: str
+    day_count: int
+
+
+class ResolveCitiesResponse(BaseModel):
+    cities: List[CityItem]
+
+
 class ActivityModel(BaseModel):
     time: Optional[str] = None
     title: str
