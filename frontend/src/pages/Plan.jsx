@@ -31,7 +31,7 @@ function parseQuery(q) {
   const fromMatch = q.match(/\bfrom\s+([A-Za-z][a-z]+(?:\s+[A-Za-z][a-z]+)?)/i)
   const origin    = fromMatch ? fromMatch[1].trim() : null
 
-  const destMatch   = q.match(/\b(?:in|to|visit|explore)\s+([A-Za-z][a-z]+(?:\s+[A-Za-z][a-z]+)?)/i)
+  const destMatch   = q.match(/\b(?:in|to|visit|explore)\s+(.+?)(?=\s+from\b|\s+for\b|\s+under\b|\s+with\b|\s+budget\b|\s*$)/i)
   const destination = destMatch ? destMatch[1].trim() : null
 
   return {

@@ -7,9 +7,23 @@ nlp = spacy.load("en_core_web_sm")
 sentiment_analyzer = SentimentIntensityAnalyzer()
 
 
+def split_compound_location(text: str) -> list[str]:
+    parts = re.split(r'\s+and\s+|\s*&\s*|\s*,\s*', text, flags=re.IGNORECASE)
+    result = []
+    for p in parts:
+        p = re.sub(r'^and\s+', '', p.strip(), flags=re.IGNORECASE)
+        if p:
+            result.append(p)
+    return result
+
+
 def extract_locations(text: str) -> list[str]:
     doc = nlp(text)
-    return [ent.text for ent in doc.ents if ent.label_ == "GPE"]
+    raw = [ent.text for ent in doc.ents if ent.label_ == "GPE"]
+    result = []
+    for loc in raw:
+        result.extend(split_compound_location(loc))
+    return result
 
 
 # Matches "from [City]" stopping before: "to", comma, period, "for", "travelling/traveling"

@@ -1,11 +1,14 @@
 import os
 import json
+import logging
 import httpx
 from dotenv import load_dotenv
 from openai import AsyncOpenAI
 from utils.cache import get_cache, set_cache, cache_key
 
 load_dotenv()
+
+logger = logging.getLogger(__name__)
 
 BASE_URL = "https://api.duffel.com"
 DUFFEL_VERSION = "v2"
@@ -51,6 +54,7 @@ _CITY_TO_IATA: dict[str, str] = {
     "singapore": "SIN",
     "bangkok": "BKK",
     "bali": "DPS",
+    "yogyakarta": "JOG",
     "kuala lumpur": "KUL",
     "jakarta": "CGK",
     "manila": "MNL",
@@ -117,7 +121,44 @@ def city_to_iata(name: str) -> str | None:
     cleaned = name.strip().lower()
     if len(cleaned) == 3 and cleaned.isalpha():
         return cleaned.upper()
-    return _CITY_TO_IATA.get(cleaned)
+    code = _CITY_TO_IATA.get(cleaned)
+    if code is None:
+        logger.warning("city_to_iata: no hardcoded IATA entry for %r", name)
+    return code
+
+
+_iata_cache: dict[str, str] = {}
+
+
+async def _resolve_iata(city: str) -> str | None:
+    """Hardcoded map first; OpenAI fallback for unknown cities."""
+    code = city_to_iata(city)
+    if code:
+        return code
+    key = city.strip().lower()
+    if key in _iata_cache:
+        return _iata_cache[key]
+    try:
+        client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+        response = await client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{
+                "role": "user",
+                "content": (
+                    f"What is the primary commercial airport IATA code for {city}? "
+                    "Reply with only the 3-letter IATA code, nothing else."
+                ),
+            }],
+            max_tokens=10,
+        )
+        raw = response.choices[0].message.content.strip().upper()
+        if len(raw) == 3 and raw.isalpha():
+            _iata_cache[key] = raw
+            logger.info("city_to_iata: resolved %r via OpenAI → %r", city, raw)
+            return raw
+    except Exception:
+        pass
+    return None
 
 
 async def search_flights(
@@ -140,8 +181,8 @@ async def search_flights(
     - Cache results for 15 minutes
     - Returns [] on any API error or missing results — never raises
     """
-    origin_code = city_to_iata(origin)
-    destination_code = city_to_iata(destination)
+    origin_code = await _resolve_iata(origin)
+    destination_code = await _resolve_iata(destination)
     if not origin_code or not destination_code:
         return []
 

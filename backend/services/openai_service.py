@@ -1,4 +1,5 @@
 import json
+import logging
 import os
 from dotenv import load_dotenv
 from openai import AsyncOpenAI
@@ -7,6 +8,7 @@ load_dotenv()
 
 client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 MODEL = "gpt-4o"
+logger = logging.getLogger(__name__)
 
 _SYSTEM_PROMPT = """\
 You are Unmapped, an intelligent AI travel assistant. You create detailed, realistic travel itineraries.
@@ -43,11 +45,28 @@ Required JSON schema (fill every field):
 
 
 async def generate_itinerary(request, locations: list[str]) -> dict:
-    destination_line = request.destination or (", ".join(locations) if locations else "unspecified")
+    n = len(locations)
+    base = request.duration_days // n if n else request.duration_days
+    remainder = request.duration_days % n if n else 0
+    day_counts = [base + (1 if i < remainder else 0) for i in range(n)]
+
+    day_cursor = 1
+    city_lines = []
+    for i, city in enumerate(locations):
+        end_day = day_cursor + day_counts[i] - 1
+        city_lines.append(f"  {i + 1}. {city} — days {day_cursor}–{end_day}")
+        day_cursor = end_day + 1
+
+    first_city = locations[0] if locations else "unknown"
+    last_city = locations[-1] if locations else "unknown"
+
     user_prompt = (
         f"Plan a trip with these details:\n"
-        f"- Destination: {destination_line}\n"
-        f"- Detected locations: {', '.join(locations) if locations else 'none'}\n"
+        f"- City sequence (visit strictly in this order):\n"
+        + "\n".join(city_lines) + "\n"
+        + f"- The trip STARTS in {first_city} and ENDS in {last_city}.\n"
+        f"  Do NOT describe travel back to any earlier city at any point.\n"
+        f"  The final day must be set in {last_city} and reflect departure FROM {last_city}.\n"
         f"- Departure date: {request.departure_date}\n"
         f"- Duration: {request.duration_days} days\n"
         f"- Budget: ${request.budget_usd:.0f} USD total for {request.travelers} traveler(s)\n"
@@ -94,6 +113,30 @@ async def resolve_country_to_city(country: str) -> str | None:
         return city if city else None
     except Exception:
         return None
+
+
+async def select_cities_for_country(country: str, duration_days: int) -> list[str]:
+    num_cities = 2 if duration_days <= 5 else 3
+    try:
+        response = await client.chat.completions.create(
+            model=MODEL,
+            messages=[{
+                "role": "user",
+                "content": (
+                    f"For a {duration_days}-day trip within {country}, name exactly {num_cities} "
+                    f"popular cities to visit in a logical travel order. "
+                    f'Reply in JSON format only: {{"cities": ["City1", "City2"]}}'
+                ),
+            }],
+            response_format={"type": "json_object"},
+            max_tokens=80,
+        )
+        data = json.loads(response.choices[0].message.content)
+        cities = data.get("cities", [])
+        return [str(c) for c in cities[:3]] if isinstance(cities, list) else []
+    except Exception as e:
+        logger.error("select_cities_for_country(%r, %d) failed: %s", country, duration_days, e)
+        return []
 
 
 async def refine_itinerary(existing_itinerary: dict, user_message: str) -> dict:

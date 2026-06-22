@@ -34,14 +34,23 @@ class BudgetBreakdown(BaseModel):
     total: float
 
 
+class CityItinerary(BaseModel):
+    name: str
+    country: str
+    day_count: int
+    order_index: int
+    days: List[DayItinerary]
+    hotel: Optional[Any] = None
+
+
 class TripResponse(BaseModel):
     summary: str
-    days: List[DayItinerary]
     budget_breakdown: BudgetBreakdown
     discovery_insights: List[Any] = []
-    flights: List[Any] = []
-    hotels: List[Any] = []
     hidden_gems: List[HiddenGem] = []
+    cities: List[CityItinerary]
+    flights: List[Any] = []
+    suggested_route_order: Optional[List[str]] = None
 
 
 class ActivityModel(BaseModel):
