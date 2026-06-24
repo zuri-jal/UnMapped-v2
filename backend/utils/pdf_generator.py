@@ -114,15 +114,27 @@ def _parse_nights(check_in: str, check_out: str) -> int:
     for fmt in ("%Y-%m-%d", "%d/%m/%Y", "%m/%d/%Y"):
         try:
             return max(1, (_dt.strptime(check_out, fmt) - _dt.strptime(check_in, fmt)).days)
-        except ValueError:
+        except (ValueError, TypeError):
             continue
     return 1
 
 
+def _nights_for_hotel(hotel) -> int | None:
+    """Derive night count from dates when available, falling back to total/rate."""
+    if hotel.check_in and hotel.check_out:
+        try:
+            return _parse_nights(hotel.check_in, hotel.check_out)
+        except Exception:
+            pass
+    if hotel.price_per_night_usd and hotel.price_per_night_usd > 0:
+        return round(hotel.total_price_usd / hotel.price_per_night_usd)
+    return None
+
+
 def generate_receipt(confirm_request, booking_reference: str) -> bytes:
     """Build a booking receipt PDF and return it as bytes."""
-    flight = confirm_request.selected_flight
-    hotel = confirm_request.selected_hotel
+    flights = confirm_request.selected_flights
+    hotels  = confirm_request.selected_hotels
 
     pdf = ReceiptPDF(booking_reference=booking_reference)
     pdf.set_auto_page_break(auto=True, margin=20)
@@ -133,32 +145,57 @@ def generate_receipt(confirm_request, booking_reference: str) -> bytes:
     _label_value(pdf, "Email:", confirm_request.passenger_email)
     pdf.ln(5)
 
+    # ── All flight legs ───────────────────────────────────────────────────────
     _section_header_receipt(pdf, "Flight Details")
-    _label_value(pdf, "Airline:", flight.airline)
-    if flight.flight_number:
-        _label_value(pdf, "Flight Number:", flight.flight_number)
-    _label_value(pdf, "Departure:", flight.departure_time)
-    _label_value(pdf, "Arrival:", flight.arrival_time)
-    _label_value(pdf, "Duration:", flight.duration)
-    _label_value(pdf, "Stops:", "Non-stop" if flight.stops == 0 else str(flight.stops))
-    _label_value(pdf, "Flight Price:", f"${flight.price_usd:,.2f} USD")
+    for i, flight in enumerate(flights, start=1):
+        if len(flights) > 1:
+            pdf.set_font("Helvetica", "I", 9)
+            pdf.set_text_color(130, 130, 130)
+            pdf.cell(0, 6, f"  Leg {i}", ln=True)
+            pdf.set_text_color(*TEXT_COLOR)
+        _label_value(pdf, "Airline:", flight.airline)
+        if flight.flight_number:
+            _label_value(pdf, "Flight Number:", flight.flight_number)
+        _label_value(pdf, "Departure:", flight.departure_time)
+        _label_value(pdf, "Arrival:", flight.arrival_time)
+        if flight.duration:
+            _label_value(pdf, "Duration:", flight.duration)
+        _label_value(pdf, "Stops:", "Non-stop" if flight.stops == 0 else str(flight.stops))
+        _label_value(pdf, "Price:", f"${flight.price_usd:,.2f} USD")
+        if i < len(flights):
+            pdf.ln(3)
     pdf.ln(5)
 
+    # ── All city hotels ───────────────────────────────────────────────────────
     _section_header_receipt(pdf, "Hotel Details")
-    _label_value(pdf, "Hotel:", hotel.name)
-    _label_value(pdf, "Location:", hotel.location)
-    if hotel.stars:
-        _label_value(pdf, "Stars:", f"{hotel.stars} stars")
-    _label_value(pdf, "Check-in:", hotel.check_in)
-    _label_value(pdf, "Check-out:", hotel.check_out)
-    nights = _parse_nights(hotel.check_in, hotel.check_out)
-    _label_value(pdf, "Nights:", str(nights))
-    _label_value(pdf, "Accommodation Total:", f"${hotel.total_price_usd:,.2f} USD")
+    for i, hotel in enumerate(hotels, start=1):
+        if len(hotels) > 1:
+            pdf.set_font("Helvetica", "I", 9)
+            pdf.set_text_color(130, 130, 130)
+            pdf.cell(0, 6, f"  City {i}: {hotel.location}", ln=True)
+            pdf.set_text_color(*TEXT_COLOR)
+        _label_value(pdf, "Hotel:", hotel.name)
+        _label_value(pdf, "Location:", hotel.location)
+        if hotel.stars:
+            _label_value(pdf, "Stars:", f"{hotel.stars} stars")
+        if hotel.check_in:
+            _label_value(pdf, "Check-in:", hotel.check_in)
+        if hotel.check_out:
+            _label_value(pdf, "Check-out:", hotel.check_out)
+        nights = _nights_for_hotel(hotel)
+        if nights is not None:
+            _label_value(pdf, "Nights:", str(nights))
+        _label_value(pdf, "Total:", f"${hotel.total_price_usd:,.2f} USD")
+        if i < len(hotels):
+            pdf.ln(3)
     pdf.ln(5)
 
+    # ── Cost breakdown ────────────────────────────────────────────────────────
     _section_header_receipt(pdf, "Cost Breakdown")
-    _label_value(pdf, "Flights:", f"${flight.price_usd:,.2f} USD")
-    _label_value(pdf, "Accommodation:", f"${hotel.total_price_usd:,.2f} USD")
+    total_flights = sum(f.price_usd for f in flights)
+    total_hotels  = sum(h.total_price_usd for h in hotels)
+    _label_value(pdf, "Flights:", f"${total_flights:,.2f} USD")
+    _label_value(pdf, "Accommodation:", f"${total_hotels:,.2f} USD")
     pdf.ln(2)
     pdf.set_font("Helvetica", "B", 10)
     pdf.set_text_color(*BRAND_COLOR)

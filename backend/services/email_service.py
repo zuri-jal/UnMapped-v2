@@ -27,6 +27,9 @@ async def send_confirmation_email(
     passenger_name: str,
     booking_reference: str,
     pdf_bytes: bytes,
+    selected_flights=None,
+    selected_hotels=None,
+    total_cost: float = None,
 ) -> bool:
     """Send booking confirmation email with PDF receipt attached."""
     print(f"[email_service] to:   {passenger_email}")
@@ -41,7 +44,12 @@ async def send_confirmation_email(
             from_email=(FROM_EMAIL, FROM_NAME),
             to_emails=passenger_email,
             subject=f"Your Unmapped booking is confirmed - {booking_reference}",
-            html_content=_confirmation_html_body(passenger_name, booking_reference),
+            html_content=_confirmation_html_body(
+                passenger_name, booking_reference,
+                selected_flights=selected_flights,
+                selected_hotels=selected_hotels,
+                total_cost=total_cost,
+            ),
         )
 
         encoded = base64.b64encode(pdf_bytes).decode()
@@ -89,7 +97,31 @@ async def send_welcome_email(to_email: str, user_name: str) -> bool:
     pass
 
 
-def _confirmation_html_body(passenger_name: str, booking_reference: str) -> str:
+def _confirmation_html_body(
+    passenger_name: str,
+    booking_reference: str,
+    selected_flights=None,
+    selected_hotels=None,
+    total_cost: float = None,
+) -> str:
+    flights_html = _flights_summary_html(selected_flights or [])
+    hotels_html  = _hotels_summary_html(selected_hotels or [])
+    total_html   = (
+        f'<p style="color:#B07050;font-size:16px;font-weight:bold;margin:16px 0 0;">'
+        f'Grand total: ${total_cost:,.2f} USD</p>'
+    ) if total_cost is not None else ""
+
+    trip_section = ""
+    if flights_html or hotels_html:
+        trip_section = f"""
+        <h3 style="color:#1a1a1a;font-size:14px;margin:24px 0 8px;text-transform:uppercase;
+                   letter-spacing:1px;">Your trip at a glance</h3>
+        {flights_html}
+        {hotels_html}
+        {total_html}
+        <hr style="border:none;border-top:1px solid #F5F0EE;margin:24px 0;">
+        """
+
     return f"""
     <div style="font-family:Helvetica,Arial,sans-serif;max-width:600px;margin:0 auto;background:#FDFAF8;">
       <div style="background:#B07050;padding:32px;text-align:center;">
@@ -106,6 +138,7 @@ def _confirmation_html_body(passenger_name: str, booking_reference: str) -> str:
           <p style="margin:0;font-size:12px;color:#888;text-transform:uppercase;letter-spacing:1px;">Booking Reference</p>
           <p style="margin:6px 0 0;font-size:22px;font-weight:bold;color:#B07050;">{booking_reference}</p>
         </div>
+        {trip_section}
         <p style="color:#444;line-height:1.6;">
           Your receipt is attached as <strong>booking_receipt.pdf</strong> and includes
           your complete flight and hotel details.
@@ -118,6 +151,87 @@ def _confirmation_html_body(passenger_name: str, booking_reference: str) -> str:
       </div>
     </div>
     """
+
+
+_TABLE_STYLE = (
+    "width:100%;border-collapse:collapse;font-size:13px;margin-bottom:16px;"
+)
+_TH_STYLE = (
+    "background:#B07050;color:#fff;padding:6px 10px;text-align:left;"
+    "font-size:11px;text-transform:uppercase;letter-spacing:0.5px;"
+)
+_TD_STYLE = "padding:6px 10px;border-bottom:1px solid #F5F0EE;color:#333;"
+_TD_ALT   = "padding:6px 10px;border-bottom:1px solid #F5F0EE;color:#333;background:#FDFAF8;"
+
+
+def _flights_summary_html(flights: list) -> str:
+    if not flights:
+        return ""
+    rows = ""
+    for i, f in enumerate(flights):
+        td = _TD_ALT if i % 2 else _TD_STYLE
+        airline = getattr(f, "airline", "—")
+        fn      = getattr(f, "flight_number", None) or "—"
+        dep     = getattr(f, "departure_time", "—")
+        arr     = getattr(f, "arrival_time",   "—")
+        price   = getattr(f, "price_usd", 0)
+        rows += (
+            f'<tr>'
+            f'<td style="{td}">{i + 1}</td>'
+            f'<td style="{td}">{airline}</td>'
+            f'<td style="{td}">{fn}</td>'
+            f'<td style="{td}">{dep}</td>'
+            f'<td style="{td}">{arr}</td>'
+            f'<td style="{td}">${price:,.2f}</td>'
+            f'</tr>'
+        )
+    return (
+        f'<p style="color:#666;font-size:12px;font-weight:bold;margin:0 0 4px;">Flights</p>'
+        f'<table style="{_TABLE_STYLE}">'
+        f'<tr>'
+        f'<th style="{_TH_STYLE}">#</th>'
+        f'<th style="{_TH_STYLE}">Airline</th>'
+        f'<th style="{_TH_STYLE}">Flight</th>'
+        f'<th style="{_TH_STYLE}">Departs</th>'
+        f'<th style="{_TH_STYLE}">Arrives</th>'
+        f'<th style="{_TH_STYLE}">Price</th>'
+        f'</tr>'
+        f'{rows}'
+        f'</table>'
+    )
+
+
+def _hotels_summary_html(hotels: list) -> str:
+    if not hotels:
+        return ""
+    rows = ""
+    for i, h in enumerate(hotels):
+        td    = _TD_ALT if i % 2 else _TD_STYLE
+        name  = getattr(h, "name",     "—")
+        loc   = getattr(h, "location", "—")
+        stars = getattr(h, "stars",    None)
+        stars_str = ("★" * stars) if stars else "—"
+        total = getattr(h, "total_price_usd", 0)
+        rows += (
+            f'<tr>'
+            f'<td style="{td}">{loc}</td>'
+            f'<td style="{td}">{name}</td>'
+            f'<td style="{td}">{stars_str}</td>'
+            f'<td style="{td}">${total:,.2f}</td>'
+            f'</tr>'
+        )
+    return (
+        f'<p style="color:#666;font-size:12px;font-weight:bold;margin:0 0 4px;">Hotels</p>'
+        f'<table style="{_TABLE_STYLE}">'
+        f'<tr>'
+        f'<th style="{_TH_STYLE}">City</th>'
+        f'<th style="{_TH_STYLE}">Hotel</th>'
+        f'<th style="{_TH_STYLE}">Stars</th>'
+        f'<th style="{_TH_STYLE}">Total</th>'
+        f'</tr>'
+        f'{rows}'
+        f'</table>'
+    )
 
 
 def _itinerary_html_body(trip_data: dict) -> str:

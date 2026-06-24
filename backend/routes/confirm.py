@@ -30,8 +30,8 @@ async def confirm_trip(request: ConfirmRequest):
             "departure_date": request.trip_data.get("departure_date"),
             "return_date": request.trip_data.get("return_date"),
             "itinerary": request.trip_data.get("days", []),
-            "flights": [request.selected_flight.model_dump(exclude_none=True)],
-            "hotels": [request.selected_hotel.model_dump(exclude_none=True)],
+            "flights": [f.model_dump(exclude_none=True) for f in request.selected_flights],
+            "hotels": [h.model_dump(exclude_none=True) for h in request.selected_hotels],
             "status": "confirmed",
         }
         trip_resp = await asyncio.to_thread(
@@ -45,8 +45,8 @@ async def confirm_trip(request: ConfirmRequest):
                 "user_id": request.user_id,
                 "type": "flight+hotel",
                 "details": {
-                    "flight": request.selected_flight.model_dump(),
-                    "hotel": request.selected_hotel.model_dump(),
+                    "flights": [f.model_dump() for f in request.selected_flights],
+                    "hotels": [h.model_dump() for h in request.selected_hotels],
                 },
                 "booking_reference": booking_reference,
                 "total_cost": request.total_cost,
@@ -74,6 +74,9 @@ async def confirm_trip(request: ConfirmRequest):
                 request.passenger_name,
                 booking_reference,
                 pdf_bytes,
+                selected_flights=request.selected_flights,
+                selected_hotels=request.selected_hotels,
+                total_cost=request.total_cost,
             )
     except Exception:
         pass

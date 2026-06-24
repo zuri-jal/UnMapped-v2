@@ -75,8 +75,8 @@ class SelectedHotel(BaseModel):
 class ConfirmRequest(BaseModel):
     user_id: Optional[str] = None
     trip_data: dict
-    selected_flight: SelectedFlight
-    selected_hotel: SelectedHotel
+    selected_flights: List[SelectedFlight]
+    selected_hotels: List[SelectedHotel]
     total_cost: float
     passenger_name: str
     passenger_email: str

@@ -14,7 +14,7 @@ function launchConfetti() {
 
 export default function Confirm() {
   const navigate = useNavigate()
-  const { tripData, selectedFlightId, selectedHotelId, reset } = useTripStore()
+  const { tripData, selectedFlightIds, reset } = useTripStore()
 
   const [passengerName, setPassengerName] = useState('')
   const [passengerEmail, setPassengerEmail] = useState('')
@@ -41,13 +41,24 @@ export default function Confirm() {
     }
   }, [booked])
 
-  const selFlight = tripData?.flights?.find((f) => (f.flight_number || '') === selectedFlightId)
-  const selHotel  = tripData?.hotels?.find((h) => (h.name || '') === selectedHotelId)
-  const nights    = tripData?.days?.length ?? 7
+  const cities  = tripData?.cities  ?? []
+  const flights = tripData?.flights ?? []
 
-  const flightTotal  = Number(selFlight?.price_usd ?? 0)
-  const hotelTotal   = Number(selHotel?.price_per_night_usd ?? 0) * nights
-  const grandTotal   = flightTotal + hotelTotal
+  // Resolve each selected flight object from the flat flights array
+  const selectedFlights = Object.entries(selectedFlightIds ?? {}).map(([legKey, flightId]) => ({
+    legKey,
+    flight: flights.find((f) => (f.flight_number || f.offer_id || '') === flightId) ?? null,
+  })).filter(({ flight }) => flight != null)
+
+  const totalNights = cities.reduce((s, c) => s + (c.day_count ?? 0), 0)
+  const flightTotal = selectedFlights.reduce((s, { flight }) => s + Number(flight.price_usd ?? 0), 0)
+  const hotelTotal  = cities.reduce((s, c) => s + Number(c.hotel?.price_per_night_usd ?? 0) * (c.day_count ?? 0), 0)
+  const grandTotal  = flightTotal + hotelTotal
+
+  // Derive date range from city day arrays (TripResponse has no top-level departure/return dates)
+  const startDate = cities[0]?.days?.[0]?.date ?? '—'
+  const lastCity  = cities[cities.length - 1]
+  const endDate   = lastCity?.days?.at(-1)?.date ?? '—'
 
   const handleConfirm = async (e) => {
     e.preventDefault()
@@ -59,24 +70,24 @@ export default function Confirm() {
     const { data, error: apiErr } = await confirmTrip({
       user_id: user?.id ?? null,
       trip_data: tripData ?? {},
-      selected_flight: {
-        airline:        selFlight?.airline ?? '',
-        flight_number:  selFlight?.flight_number ?? selFlight?.offer_id ?? null,
-        departure_time: selFlight?.departure_time ?? '',
-        arrival_time:   selFlight?.arrival_time ?? '',
-        duration:       selFlight?.duration ?? null,
-        price_usd:      selFlight?.price ?? selFlight?.price_usd ?? 0,
-        stops:          selFlight?.stops ?? 0,
-      },
-      selected_hotel: {
-        name:              selHotel?.name ?? '',
-        stars:             selHotel?.stars ?? null,
-        price_per_night_usd: selHotel?.price_per_night ?? selHotel?.price_per_night_usd ?? 0,
-        total_price_usd:   hotelTotal,
-        location:          selHotel?.city ?? selHotel?.location ?? '',
-        check_in:          selHotel?.check_in ?? tripData?.days?.[0]?.date ?? null,
-        check_out:         selHotel?.check_out ?? tripData?.days?.at(-1)?.date ?? null,
-      },
+      selected_flights: selectedFlights.map(({ flight }) => ({
+        airline:        flight.airline,
+        flight_number:  flight.flight_number ?? flight.offer_id ?? null,
+        departure_time: flight.departure_time,
+        arrival_time:   flight.arrival_time,
+        duration:       flight.duration ?? null,
+        price_usd:      Number(flight.price_usd ?? 0),
+        stops:          flight.stops ?? 0,
+      })),
+      selected_hotels: cities.filter((c) => c.hotel).map((city) => ({
+        name:                city.hotel.name,
+        stars:               city.hotel.stars ?? null,
+        price_per_night_usd: Number(city.hotel.price_per_night_usd ?? 0),
+        total_price_usd:     Number(city.hotel.price_per_night_usd ?? 0) * (city.day_count ?? 0),
+        location:            city.hotel.location ?? city.name,
+        check_in:            null,
+        check_out:           null,
+      })),
       total_cost:      grandTotal,
       passenger_name:  passengerName,
       passenger_email: passengerEmail,
@@ -102,7 +113,6 @@ export default function Confirm() {
             Check your email for your full itinerary and booking receipt.
           </p>
 
-          {/* Booking ref */}
           {refs?.booking_reference && (
             <div className="bg-[#0A0A0F] border border-[#1E1B25] rounded-xl p-4 mb-6 text-left">
               <div className="flex justify-between text-sm">
@@ -130,7 +140,6 @@ export default function Confirm() {
     <div className="min-h-screen bg-[#0A0A0F] py-10 px-6">
       <div className="max-w-xl mx-auto">
 
-        {/* Back */}
         <button
           onClick={() => navigate('/plan')}
           className="flex items-center gap-1.5 text-sm text-[#8A7A72] hover:text-[#F0ECE8] transition-colors mb-8"
@@ -145,43 +154,59 @@ export default function Confirm() {
         <div className="bg-[#0F0D12] border border-[#1E1B25] rounded-2xl p-5 mb-4">
           <h3 className="text-xs font-semibold text-[#8A7A72] uppercase tracking-wider mb-3">Trip summary</h3>
           <div className="space-y-2 text-sm">
-            <Row label="Destination" value={tripData?.days?.[0]?.location ?? '—'} />
-            <Row label="Dates" value={`${tripData?.days?.[0]?.date ?? '—'} → ${tripData?.days?.at(-1)?.date ?? '—'}`} />
-            <Row label="Duration" value={`${nights} nights`} />
+            <Row label="Route"    value={cities.map((c) => c.name).join(' → ') || '—'} />
+            <Row label="Dates"    value={`${startDate} → ${endDate}`} />
+            <Row label="Duration" value={`${totalNights} nights`} />
           </div>
         </div>
 
-        {/* Selected flight */}
+        {/* Selected flights — one section per leg */}
         <div className="bg-[#0F0D12] border border-[#1E1B25] rounded-2xl p-5 mb-4">
-          <h3 className="text-xs font-semibold text-[#8A7A72] uppercase tracking-wider mb-3">Flight</h3>
-          {selFlight ? (
-            <div className="space-y-1.5 text-sm">
-              <Row label="Airline"  value={selFlight.airline} />
-              <Row label="Flight"   value={selFlight.flight_number} />
-              <Row label="Departs"  value={selFlight.departure_time} />
-              <Row label="Arrives"  value={selFlight.arrival_time} />
-              <Row label="Stops"    value={selFlight.stops === 0 ? 'Nonstop' : `${selFlight.stops} stop(s)`} />
-              <Row label="Price"    value={`$${flightTotal.toLocaleString()}`} highlight />
-            </div>
+          <h3 className="text-xs font-semibold text-[#8A7A72] uppercase tracking-wider mb-3">Flights</h3>
+          {selectedFlights.length ? (
+            selectedFlights.map(({ legKey, flight }) => (
+              <div key={legKey} className="mb-4 last:mb-0">
+                <p className="text-[9px] font-semibold text-[#5DCAA5] uppercase tracking-wider mb-1.5">
+                  ✈ {legKey}
+                </p>
+                <div className="space-y-1.5 text-sm">
+                  <Row label="Airline" value={flight.airline} />
+                  <Row label="Flight"  value={flight.flight_number ?? '—'} />
+                  <Row label="Departs" value={flight.departure_time} />
+                  <Row label="Arrives" value={flight.arrival_time} />
+                  <Row label="Stops"   value={flight.stops === 0 ? 'Nonstop' : `${flight.stops} stop(s)`} />
+                  <Row label="Price"   value={`$${Number(flight.price_usd ?? 0).toLocaleString()}`} highlight />
+                </div>
+              </div>
+            ))
           ) : (
-            <p className="text-sm text-orange-400">No flight selected — go back and choose one.</p>
+            <p className="text-sm text-orange-400">No flights selected — go back and choose one per leg.</p>
           )}
         </div>
 
-        {/* Selected hotel */}
+        {/* Hotels — one section per city */}
         <div className="bg-[#0F0D12] border border-[#1E1B25] rounded-2xl p-5 mb-4">
-          <h3 className="text-xs font-semibold text-[#8A7A72] uppercase tracking-wider mb-3">Hotel</h3>
-          {selHotel ? (
-            <div className="space-y-1.5 text-sm">
-              <Row label="Hotel"    value={selHotel.name} />
-              <Row label="Location" value={selHotel.location} />
-              <Row label="Check-in" value={selHotel.check_in} />
-              <Row label="Check-out" value={selHotel.check_out} />
-              <Row label="Nights"   value={String(nights)} />
-              <Row label="Total"    value={`$${hotelTotal.toLocaleString()}`} highlight />
-            </div>
+          <h3 className="text-xs font-semibold text-[#8A7A72] uppercase tracking-wider mb-3">Hotels</h3>
+          {cities.filter((c) => c.hotel).length ? (
+            cities.filter((c) => c.hotel).map((city, i) => (
+              <div key={i} className="mb-4 last:mb-0">
+                <p className="text-[9px] font-semibold text-[#5DCAA5] uppercase tracking-wider mb-1.5">
+                  🏨 {city.name}{city.country ? `, ${city.country}` : ''}
+                </p>
+                <div className="space-y-1.5 text-sm">
+                  <Row label="Hotel"    value={city.hotel.name} />
+                  <Row label="Location" value={city.hotel.location ?? city.name} />
+                  <Row label="Nights"   value={String(city.day_count ?? 0)} />
+                  <Row
+                    label="Total"
+                    value={`$${(Number(city.hotel.price_per_night_usd ?? 0) * (city.day_count ?? 0)).toLocaleString()}`}
+                    highlight
+                  />
+                </div>
+              </div>
+            ))
           ) : (
-            <p className="text-sm text-orange-400">No hotel selected — go back and choose one.</p>
+            <p className="text-sm text-orange-400">No hotels available — check your trip data.</p>
           )}
         </div>
 
@@ -198,7 +223,7 @@ export default function Confirm() {
           </div>
         </div>
 
-        {/* Mock payment form */}
+        {/* Passenger + payment form */}
         <form onSubmit={handleConfirm}>
           <div className="bg-[#0F0D12] border border-[#1E1B25] rounded-2xl p-5 mb-4">
             <h3 className="text-xs font-semibold text-[#8A7A72] uppercase tracking-wider mb-3">Passenger</h3>
@@ -277,7 +302,7 @@ export default function Confirm() {
 
           <button
             type="submit"
-            disabled={loading || !selFlight || !selHotel}
+            disabled={loading || selectedFlights.length === 0}
             className="btn-primary w-full text-base py-3.5"
           >
             {loading ? 'Confirming booking…' : `Confirm and book · $${grandTotal.toLocaleString()}`}
