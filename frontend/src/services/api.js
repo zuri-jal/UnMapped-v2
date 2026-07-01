@@ -60,6 +60,42 @@ export async function confirmTrip(data) {
   }
 }
 
+export async function getProfile(userId) {
+  try {
+    const res = await api.get(`/profile/?user_id=${encodeURIComponent(userId)}`)
+    return { data: res.data, error: null }
+  } catch (err) {
+    return { data: null, error: err.message ?? 'Request failed' }
+  }
+}
+
+export async function updateProfile(data) {
+  try {
+    const res = await api.put('/profile/', data)
+    return { data: res.data, error: null }
+  } catch (err) {
+    return { data: null, error: err.message ?? 'Request failed' }
+  }
+}
+
+export async function getTrips(userId) {
+  try {
+    const res = await api.get(`/trips/?user_id=${encodeURIComponent(userId)}`)
+    return { data: res.data, error: null }
+  } catch (err) {
+    return { data: null, error: err.message ?? 'Request failed' }
+  }
+}
+
+export async function getTrip(tripId, userId) {
+  try {
+    const res = await api.get(`/trips/${tripId}?user_id=${encodeURIComponent(userId)}`)
+    return { data: res.data, error: null }
+  } catch (err) {
+    return { data: null, error: err.message ?? 'Request failed' }
+  }
+}
+
 export async function getDiscovery(data = {}) {
   try {
     const res = await api.post('/discover', data)

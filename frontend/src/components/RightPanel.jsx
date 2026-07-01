@@ -5,12 +5,13 @@ import ItineraryTab from './ItineraryTab'
 import FlightCard   from './FlightCard'
 import HotelCard    from './HotelCard'
 import BudgetTab    from './BudgetTab'
+import TransportTab from './TransportTab'
 
-const TABS = ['Itinerary', 'Flights', 'Hotels', 'Budget']
+const TABS = ['Itinerary', 'Flights', 'Hotels', 'Ground Transport', 'Budget']
 
 export default function RightPanel() {
   const navigate = useNavigate()
-  const { tripData, selectedFlightIds, totalCost } = useTripStore()
+  const { tripData, selectedFlightIds, selectedGroundTransportIds, totalCost } = useTripStore()
   const [active, setActive] = useState('Itinerary')
 
   const cities = tripData?.cities ?? []
@@ -26,8 +27,11 @@ export default function RightPanel() {
     return [...map.entries()]
   })()
 
-  // Can confirm when at least one flight leg is selected (hotels are one-per-city, always included)
-  const canConfirm   = Object.keys(selectedFlightIds ?? {}).length > 0
+  // Can confirm when at least one transport (flight or ground) is selected
+  const canConfirm = (
+    Object.keys(selectedFlightIds ?? {}).length > 0 ||
+    Object.keys(selectedGroundTransportIds ?? {}).length > 0
+  )
   const totalDisplay = totalCost > 0 ? totalCost.toLocaleString() : '—'
 
   return (
@@ -112,6 +116,7 @@ export default function RightPanel() {
           </div>
         )}
 
+        {active === 'Ground Transport' && <TransportTab />}
         {active === 'Budget' && <BudgetTab />}
       </div>
 

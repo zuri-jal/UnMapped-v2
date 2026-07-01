@@ -43,6 +43,24 @@ class CityItinerary(BaseModel):
     hotel: Optional[Any] = None
 
 
+class GroundTransportOption(BaseModel):
+    id: str
+    mode: str
+    operator: str
+    departure_time: str
+    arrival_time: str
+    duration: str
+    price_usd: float
+
+
+class GroundTransportLeg(BaseModel):
+    leg_from: str
+    leg_to: str
+    distance_km: int
+    driving_duration_hours: float
+    options: List[GroundTransportOption] = []
+
+
 class TripResponse(BaseModel):
     summary: str
     budget_breakdown: BudgetBreakdown
@@ -50,6 +68,7 @@ class TripResponse(BaseModel):
     hidden_gems: List[HiddenGem] = []
     cities: List[CityItinerary]
     flights: List[Any] = []
+    ground_transport: List[Any] = []
     suggested_route_order: Optional[List[str]] = None
 
 

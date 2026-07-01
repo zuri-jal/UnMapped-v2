@@ -3,7 +3,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 
-from routes import plan, update, confirm, discover, resolve_cities
+from routes import plan, update, confirm, discover, resolve_cities, profile, trips
 
 load_dotenv()
 
@@ -26,6 +26,8 @@ app.include_router(resolve_cities.router, prefix="/resolve-cities", tags=["plan"
 app.include_router(update.router,         prefix="/update",         tags=["update"])
 app.include_router(confirm.router,        prefix="/confirm",        tags=["confirm"])
 app.include_router(discover.router,       prefix="/discover",       tags=["discover"])
+app.include_router(profile.router,        prefix="/profile",        tags=["profile"])
+app.include_router(trips.router,          prefix="/trips",           tags=["trips"])
 
 
 @app.get("/")

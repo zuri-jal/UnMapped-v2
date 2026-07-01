@@ -29,6 +29,7 @@ async def send_confirmation_email(
     pdf_bytes: bytes,
     selected_flights=None,
     selected_hotels=None,
+    selected_ground_transport=None,
     total_cost: float = None,
 ) -> bool:
     """Send booking confirmation email with PDF receipt attached."""
@@ -48,6 +49,7 @@ async def send_confirmation_email(
                 passenger_name, booking_reference,
                 selected_flights=selected_flights,
                 selected_hotels=selected_hotels,
+                selected_ground_transport=selected_ground_transport,
                 total_cost=total_cost,
             ),
         )
@@ -102,9 +104,11 @@ def _confirmation_html_body(
     booking_reference: str,
     selected_flights=None,
     selected_hotels=None,
+    selected_ground_transport=None,
     total_cost: float = None,
 ) -> str:
     flights_html = _flights_summary_html(selected_flights or [])
+    gt_html      = _ground_transport_summary_html(selected_ground_transport or [])
     hotels_html  = _hotels_summary_html(selected_hotels or [])
     total_html   = (
         f'<p style="color:#B07050;font-size:16px;font-weight:bold;margin:16px 0 0;">'
@@ -112,11 +116,12 @@ def _confirmation_html_body(
     ) if total_cost is not None else ""
 
     trip_section = ""
-    if flights_html or hotels_html:
+    if flights_html or gt_html or hotels_html:
         trip_section = f"""
         <h3 style="color:#1a1a1a;font-size:14px;margin:24px 0 8px;text-transform:uppercase;
                    letter-spacing:1px;">Your trip at a glance</h3>
         {flights_html}
+        {gt_html}
         {hotels_html}
         {total_html}
         <hr style="border:none;border-top:1px solid #F5F0EE;margin:24px 0;">
@@ -170,14 +175,18 @@ def _flights_summary_html(flights: list) -> str:
     rows = ""
     for i, f in enumerate(flights):
         td = _TD_ALT if i % 2 else _TD_STYLE
-        airline = getattr(f, "airline", "—")
-        fn      = getattr(f, "flight_number", None) or "—"
-        dep     = getattr(f, "departure_time", "—")
-        arr     = getattr(f, "arrival_time",   "—")
-        price   = getattr(f, "price_usd", 0)
+        airline  = getattr(f, "airline", "—")
+        fn       = getattr(f, "flight_number", None) or "—"
+        leg_from = getattr(f, "leg_from", None) or ""
+        leg_to   = getattr(f, "leg_to",   None) or ""
+        route    = f"{leg_from} → {leg_to}" if (leg_from and leg_to) else "—"
+        dep      = getattr(f, "departure_time", "—")
+        arr      = getattr(f, "arrival_time",   "—")
+        price    = getattr(f, "price_usd", 0)
         rows += (
             f'<tr>'
             f'<td style="{td}">{i + 1}</td>'
+            f'<td style="{td}">{route}</td>'
             f'<td style="{td}">{airline}</td>'
             f'<td style="{td}">{fn}</td>'
             f'<td style="{td}">{dep}</td>'
@@ -190,6 +199,7 @@ def _flights_summary_html(flights: list) -> str:
         f'<table style="{_TABLE_STYLE}">'
         f'<tr>'
         f'<th style="{_TH_STYLE}">#</th>'
+        f'<th style="{_TH_STYLE}">Route</th>'
         f'<th style="{_TH_STYLE}">Airline</th>'
         f'<th style="{_TH_STYLE}">Flight</th>'
         f'<th style="{_TH_STYLE}">Departs</th>'
@@ -231,6 +241,45 @@ def _hotels_summary_html(hotels: list) -> str:
         f'</tr>'
         f'{rows}'
         f'</table>'
+    )
+
+
+def _ground_transport_summary_html(ground_transport: list) -> str:
+    if not ground_transport:
+        return ""
+    rows = ""
+    for i, gt in enumerate(ground_transport):
+        td = _TD_ALT if i % 2 else _TD_STYLE
+        leg_from = getattr(gt, "leg_from", "—")
+        leg_to   = getattr(gt, "leg_to",   "—")
+        mode     = getattr(gt, "mode",      "—").title()
+        operator = getattr(gt, "operator",  "—")
+        dep      = getattr(gt, "departure_time", "—")
+        arr      = getattr(gt, "arrival_time",   "—")
+        price    = getattr(gt, "price_usd", 0)
+        rows += (
+            f"<tr>"
+            f'<td style="{td}">{leg_from} → {leg_to}</td>'
+            f'<td style="{td}">{mode}</td>'
+            f'<td style="{td}">{operator}</td>'
+            f'<td style="{td}">{dep}</td>'
+            f'<td style="{td}">{arr}</td>'
+            f'<td style="{td}">${price:,.2f}</td>'
+            f"</tr>"
+        )
+    return (
+        f'<p style="color:#666;font-size:12px;font-weight:bold;margin:0 0 4px;">Ground Transport</p>'
+        f'<table style="{_TABLE_STYLE}">'
+        f"<tr>"
+        f'<th style="{_TH_STYLE}">Route</th>'
+        f'<th style="{_TH_STYLE}">Mode</th>'
+        f'<th style="{_TH_STYLE}">Operator</th>'
+        f'<th style="{_TH_STYLE}">Departs</th>'
+        f'<th style="{_TH_STYLE}">Arrives</th>'
+        f'<th style="{_TH_STYLE}">Price</th>'
+        f"</tr>"
+        f"{rows}"
+        f"</table>"
     )
 
 

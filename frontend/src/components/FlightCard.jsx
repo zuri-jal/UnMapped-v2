@@ -2,12 +2,13 @@ import React from 'react'
 import useTripStore from '../store/tripStore'
 
 export default function FlightCard({ flight, legKey, index }) {
-  const { selectFlight, selectedFlightIds } = useTripStore()
+  const { selectFlight, selectedFlightIds, selectedGroundTransportIds } = useTripStore()
 
   const id = flight.flight_number || flight.offer_id || `flight-${index}`
   // legKey is provided by the parent group; derive a fallback from the flight itself
   const effectiveLegKey = legKey ?? (flight.from && flight.to ? `${flight.from} → ${flight.to}` : 'default')
   const isSelected = selectedFlightIds[effectiveLegKey] === id
+  const groundChosen = !!selectedGroundTransportIds?.[effectiveLegKey]
 
   const stopCount = flight.stops ?? 0
   const stops = stopCount === 0 ? 'Nonstop' : `${stopCount} stop${stopCount > 1 ? 's' : ''}`
@@ -35,6 +36,9 @@ export default function FlightCard({ flight, legKey, index }) {
         <div className="text-right shrink-0">
           <p className="text-sm font-bold text-rose-gold">${Number(flight.price_usd ?? 0).toLocaleString()}</p>
           {isSelected && <p className="text-[9px] text-rose-gold font-medium">Selected ✓</p>}
+          {groundChosen && !isSelected && (
+            <p className="text-[9px] text-[#8A7A72]">Ground transport chosen</p>
+          )}
         </div>
       </div>
 

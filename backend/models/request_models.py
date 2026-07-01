@@ -53,6 +53,8 @@ class UpdateRequest(BaseModel):
 class SelectedFlight(BaseModel):
     airline: str
     flight_number: Optional[str] = None
+    leg_from: Optional[str] = None
+    leg_to: Optional[str] = None
     departure_time: str
     arrival_time: str
     duration: Optional[str] = None
@@ -72,14 +74,36 @@ class SelectedHotel(BaseModel):
     why_recommended: Optional[str] = None
 
 
+class SelectedGroundTransport(BaseModel):
+    leg_from: str
+    leg_to: str
+    mode: str
+    operator: str
+    departure_time: str
+    arrival_time: str
+    duration: str
+    price_usd: float
+
+
 class ConfirmRequest(BaseModel):
     user_id: Optional[str] = None
     trip_data: dict
     selected_flights: List[SelectedFlight]
     selected_hotels: List[SelectedHotel]
+    selected_ground_transport: List[SelectedGroundTransport] = []
     total_cost: float
     passenger_name: str
     passenger_email: str
+
+
+class ProfileUpdate(BaseModel):
+    user_id: str
+    travel_style: Optional[str] = None
+    budget_range: Optional[str] = None
+    interests: Optional[List[str]] = None
+    home_city: Optional[str] = None
+    currency: Optional[str] = None
+    dietary_restrictions: Optional[List[str]] = None
 
 
 class DiscoverRequest(BaseModel):

@@ -14,7 +14,7 @@ function launchConfetti() {
 
 export default function Confirm() {
   const navigate = useNavigate()
-  const { tripData, selectedFlightIds, reset } = useTripStore()
+  const { tripData, selectedFlightIds, selectedGroundTransportIds, reset } = useTripStore()
 
   const [passengerName, setPassengerName] = useState('')
   const [passengerEmail, setPassengerEmail] = useState('')
@@ -44,21 +44,59 @@ export default function Confirm() {
   const cities  = tripData?.cities  ?? []
   const flights = tripData?.flights ?? []
 
-  // Resolve each selected flight object from the flat flights array
-  const selectedFlights = Object.entries(selectedFlightIds ?? {}).map(([legKey, flightId]) => ({
-    legKey,
-    flight: flights.find((f) => (f.flight_number || f.offer_id || '') === flightId) ?? null,
-  })).filter(({ flight }) => flight != null)
+  // Build ground transport lookup by legKey
+  const gtByLegKey = {}
+  for (const gtLeg of (tripData?.ground_transport ?? [])) {
+    gtByLegKey[`${gtLeg.leg_from} → ${gtLeg.leg_to}`] = gtLeg
+  }
 
-  const totalNights = cities.reduce((s, c) => s + (c.day_count ?? 0), 0)
-  const flightTotal = selectedFlights.reduce((s, { flight }) => s + Number(flight.price_usd ?? 0), 0)
-  const hotelTotal  = cities.reduce((s, c) => s + Number(c.hotel?.price_per_night_usd ?? 0) * (c.day_count ?? 0), 0)
-  const grandTotal  = flightTotal + hotelTotal
+  // All unique leg keys: flight legs first (preserves trip order), then any GT-only legs
+  const allLegKeys = (() => {
+    const seen = new Set()
+    const keys = []
+    for (const f of flights) {
+      const key = f.from && f.to ? `${f.from} → ${f.to}` : null
+      if (key && !seen.has(key)) { seen.add(key); keys.push(key) }
+    }
+    for (const gtLeg of (tripData?.ground_transport ?? [])) {
+      const key = gtLeg.leg_from && gtLeg.leg_to ? `${gtLeg.leg_from} → ${gtLeg.leg_to}` : null
+      if (key && !seen.has(key)) { seen.add(key); keys.push(key) }
+    }
+    return keys
+  })()
 
-  // Derive date range from city day arrays (TripResponse has no top-level departure/return dates)
+  // Per-leg transport: GT takes precedence (store enforces mutual exclusivity; GT is the user's last explicit choice)
+  const transportPerLeg = allLegKeys.map((legKey) => {
+    const gtId = selectedGroundTransportIds?.[legKey]
+    if (gtId) {
+      const gtLeg  = gtByLegKey[legKey]
+      const option = gtLeg?.options?.find((o) => o.id === gtId)
+      return { legKey, type: option?.mode ?? 'ground', item: option ?? null }
+    }
+    const flightId = selectedFlightIds?.[legKey]
+    if (flightId) {
+      const flight = flights.find((f) => (f.flight_number || f.offer_id || '') === flightId)
+      return { legKey, type: 'flight', item: flight ?? null }
+    }
+    return { legKey, type: null, item: null }
+  })
+
+  const totalNights   = cities.reduce((s, c) => s + (c.day_count ?? 0), 0)
+  const flightTotal   = transportPerLeg
+    .filter((t) => t.type === 'flight' && t.item)
+    .reduce((s, { item }) => s + Number(item.price_usd ?? 0), 0)
+  const gtTotal       = transportPerLeg
+    .filter((t) => t.type !== 'flight' && t.type !== null && t.item)
+    .reduce((s, { item }) => s + Number(item.price_usd ?? 0), 0)
+  const hotelTotal    = cities.reduce((s, c) => s + Number(c.hotel?.price_per_night_usd ?? 0) * (c.day_count ?? 0), 0)
+  const grandTotal    = flightTotal + gtTotal + hotelTotal
+
+  // Derive date range from city day arrays
   const startDate = cities[0]?.days?.[0]?.date ?? '—'
   const lastCity  = cities[cities.length - 1]
   const endDate   = lastCity?.days?.at(-1)?.date ?? '—'
+
+  const anyTransportSelected = transportPerLeg.some((t) => t.item !== null)
 
   const handleConfirm = async (e) => {
     e.preventDefault()
@@ -70,15 +108,37 @@ export default function Confirm() {
     const { data, error: apiErr } = await confirmTrip({
       user_id: user?.id ?? null,
       trip_data: tripData ?? {},
-      selected_flights: selectedFlights.map(({ flight }) => ({
-        airline:        flight.airline,
-        flight_number:  flight.flight_number ?? flight.offer_id ?? null,
-        departure_time: flight.departure_time,
-        arrival_time:   flight.arrival_time,
-        duration:       flight.duration ?? null,
-        price_usd:      Number(flight.price_usd ?? 0),
-        stops:          flight.stops ?? 0,
-      })),
+      selected_flights: transportPerLeg
+        .filter((t) => t.type === 'flight' && t.item)
+        .map(({ legKey, item: flight }) => {
+          const [legFrom, ...legToParts] = legKey.split(' → ')
+          return {
+            airline:        flight.airline,
+            flight_number:  flight.flight_number ?? flight.offer_id ?? null,
+            leg_from:       legFrom ?? '',
+            leg_to:         legToParts.join(' → ') ?? '',
+            departure_time: flight.departure_time,
+            arrival_time:   flight.arrival_time,
+            duration:       flight.duration ?? null,
+            price_usd:      Number(flight.price_usd ?? 0),
+            stops:          flight.stops ?? 0,
+          }
+        }),
+      selected_ground_transport: transportPerLeg
+        .filter((t) => t.type !== 'flight' && t.type !== null && t.item)
+        .map(({ legKey, type, item }) => {
+          const [legFrom, ...legToParts] = legKey.split(' → ')
+          return {
+            leg_from:       legFrom ?? '',
+            leg_to:         legToParts.join(' → ') ?? '',
+            mode:           type,
+            operator:       item.operator,
+            departure_time: item.departure_time,
+            arrival_time:   item.arrival_time,
+            duration:       item.duration,
+            price_usd:      Number(item.price_usd ?? 0),
+          }
+        }),
       selected_hotels: cities.filter((c) => c.hotel).map((city) => ({
         name:                city.hotel.name,
         stars:               city.hotel.stars ?? null,
@@ -160,27 +220,47 @@ export default function Confirm() {
           </div>
         </div>
 
-        {/* Selected flights — one section per leg */}
+        {/* Transport — one section per leg, showing flight OR ground transport */}
         <div className="bg-[#0F0D12] border border-[#1E1B25] rounded-2xl p-5 mb-4">
-          <h3 className="text-xs font-semibold text-[#8A7A72] uppercase tracking-wider mb-3">Flights</h3>
-          {selectedFlights.length ? (
-            selectedFlights.map(({ legKey, flight }) => (
-              <div key={legKey} className="mb-4 last:mb-0">
-                <p className="text-[9px] font-semibold text-[#5DCAA5] uppercase tracking-wider mb-1.5">
-                  ✈ {legKey}
-                </p>
-                <div className="space-y-1.5 text-sm">
-                  <Row label="Airline" value={flight.airline} />
-                  <Row label="Flight"  value={flight.flight_number ?? '—'} />
-                  <Row label="Departs" value={flight.departure_time} />
-                  <Row label="Arrives" value={flight.arrival_time} />
-                  <Row label="Stops"   value={flight.stops === 0 ? 'Nonstop' : `${flight.stops} stop(s)`} />
-                  <Row label="Price"   value={`$${Number(flight.price_usd ?? 0).toLocaleString()}`} highlight />
+          <h3 className="text-xs font-semibold text-[#8A7A72] uppercase tracking-wider mb-3">Transport</h3>
+          {transportPerLeg.length ? (
+            transportPerLeg.map(({ legKey, type, item }) => {
+              const icon = type === 'flight' ? '✈' : type === 'train' ? '🚆' : type === 'bus' ? '🚌' : '—'
+              return (
+                <div key={legKey} className="mb-4 last:mb-0">
+                  <p className="text-[9px] font-semibold text-[#5DCAA5] uppercase tracking-wider mb-1.5">
+                    {icon} {legKey}
+                  </p>
+                  {item ? (
+                    <div className="space-y-1.5 text-sm">
+                      {type === 'flight' ? (
+                        <>
+                          <Row label="Airline" value={item.airline} />
+                          <Row label="Flight"  value={item.flight_number ?? '—'} />
+                          <Row label="Departs" value={item.departure_time} />
+                          <Row label="Arrives" value={item.arrival_time} />
+                          <Row label="Stops"   value={item.stops === 0 ? 'Nonstop' : `${item.stops} stop(s)`} />
+                          <Row label="Price"   value={`$${Number(item.price_usd ?? 0).toLocaleString()}`} highlight />
+                        </>
+                      ) : (
+                        <>
+                          <Row label="Operator"  value={item.operator} />
+                          <Row label="Mode"      value={type === 'train' ? 'Train' : 'Bus'} />
+                          <Row label="Departs"   value={item.departure_time} />
+                          <Row label="Arrives"   value={item.arrival_time} />
+                          <Row label="Duration"  value={item.duration} />
+                          <Row label="Price"     value={`$${Number(item.price_usd ?? 0).toLocaleString()}`} highlight />
+                        </>
+                      )}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-orange-400">None selected — go back and choose a transport option.</p>
+                  )}
                 </div>
-              </div>
-            ))
+              )
+            })
           ) : (
-            <p className="text-sm text-orange-400">No flights selected — go back and choose one per leg.</p>
+            <p className="text-sm text-orange-400">No transport selected — go back and choose a flight or ground transport per leg.</p>
           )}
         </div>
 
@@ -214,7 +294,8 @@ export default function Confirm() {
         <div className="bg-[#0F0D12] border border-[#1E1B25] rounded-2xl p-5 mb-4">
           <h3 className="text-xs font-semibold text-[#8A7A72] uppercase tracking-wider mb-3">Total cost</h3>
           <div className="space-y-1.5 text-sm">
-            <Row label="Flights"       value={`$${flightTotal.toLocaleString()}`} />
+            {flightTotal > 0 && <Row label="Flights"          value={`$${flightTotal.toLocaleString()}`} />}
+            {gtTotal > 0      && <Row label="Ground transport" value={`$${gtTotal.toLocaleString()}`} />}
             <Row label="Accommodation" value={`$${hotelTotal.toLocaleString()}`} />
           </div>
           <div className="mt-3 pt-3 border-t border-[#1E1B25] flex justify-between">
@@ -302,7 +383,7 @@ export default function Confirm() {
 
           <button
             type="submit"
-            disabled={loading || selectedFlights.length === 0}
+            disabled={loading || !anyTransportSelected}
             className="btn-primary w-full text-base py-3.5"
           >
             {loading ? 'Confirming booking…' : `Confirm and book · $${grandTotal.toLocaleString()}`}

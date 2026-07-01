@@ -26,16 +26,29 @@ export default function ChatPanel() {
     messages, addMessage,
     tripData, setTripData,
     isLoading, setLoading,
+    pendingPlanConfirm, setPendingPlanConfirm,
   } = useTripStore()
 
-  const [input, setInput]            = useState('')
-  const [activeStyles, setStyles]    = useState([])
-  const [loadingText, setLoadingTxt] = useState(LOADING_MSGS[0])
+  const [input, setInput]                   = useState('')
+  const [activeStyles, setStyles]           = useState([])
+  const [loadingText, setLoadingTxt]        = useState(LOADING_MSGS[0])
+  const [pendingConfirm, setPendingConfirm] = useState(null)
+  const [departDate, setDepartDate]         = useState('')
+  const [durationDays, setDurationDays]     = useState(7)
   const bottomRef = useRef(null)
 
   useEffect(() => {
+    if (!pendingPlanConfirm) return
+    const { message, departDate: d, durationDays: n, travelStyle: s } = pendingPlanConfirm
+    setPendingPlanConfirm(null)
+    setDepartDate(d)
+    setDurationDays(n)
+    setPendingConfirm({ message, travelStyle: s })
+  }, [pendingPlanConfirm])
+
+  useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages, isLoading])
+  }, [messages, isLoading, pendingConfirm])
 
   useEffect(() => {
     if (!isLoading) return
@@ -52,20 +65,30 @@ export default function ChatPanel() {
       prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s]
     )
 
-  const sendMessage = async (text) => {
+  const sendMessage = (text) => {
     const msg = (text ?? input).trim()
-    if (!msg) return
+    if (!msg || pendingConfirm) return
     setInput('')
     addMessage('user', msg)
+    // Infer duration from message ("10 day trip" → 10), clamp 1–30, default 7
+    const m = msg.match(/\b(\d+)\s*-?\s*days?\b/i)
+    setDurationDays(m ? Math.max(1, Math.min(30, parseInt(m[1]))) : 7)
+    setDepartDate(nextDeparture())
+    setPendingConfirm({ message: msg, travelStyle: activeStyles.length ? activeStyles.join(', ') : 'adventure' })
+  }
+
+  const confirmAndPlan = async () => {
+    if (!pendingConfirm) return
+    const { message, travelStyle } = pendingConfirm
+    setPendingConfirm(null)
     setLoading(true)
 
-    const travelStyle = activeStyles.length ? activeStyles.join(', ') : 'adventure'
     const { data, error } = await planTrip({
-      user_message: msg,
+      user_message: message,
       destination: tripData?.days?.[0]?.location ?? null,
       origin: null,
-      departure_date: nextDeparture(),
-      duration_days: tripData?.days?.length ?? 7,
+      departure_date: departDate,
+      duration_days: durationDays,
       budget_usd: Number(tripData?.budget_breakdown?.total ?? 2000),
       travel_style: travelStyle,
       travelers: 1,
@@ -120,6 +143,43 @@ export default function ChatPanel() {
             </div>
           </div>
         ))}
+
+        {pendingConfirm && !isLoading && (
+          <div className="flex justify-start">
+            <div className="bg-[#0F0D12] border border-rose-gold/30 rounded-2xl rounded-bl-sm px-3 py-3 max-w-[90%] w-full">
+              <p className="text-[10px] text-[#8A7A72] mb-2.5">When do you want to go?</p>
+              <div className="space-y-2 mb-3">
+                <div>
+                  <label className="block text-[9px] text-[#8A7A72] mb-1">Start date</label>
+                  <input
+                    type="date"
+                    value={departDate}
+                    min={new Date().toISOString().split('T')[0]}
+                    onChange={(e) => setDepartDate(e.target.value)}
+                    className="input-dark !py-1.5 !px-3 text-xs"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[9px] text-[#8A7A72] mb-1">Duration (days)</label>
+                  <input
+                    type="number"
+                    value={durationDays}
+                    min={1}
+                    max={30}
+                    onChange={(e) => setDurationDays(Math.max(1, Math.min(30, parseInt(e.target.value) || 1)))}
+                    className="input-dark !py-1.5 !px-3 text-xs"
+                  />
+                </div>
+              </div>
+              <button
+                onClick={confirmAndPlan}
+                className="w-full bg-rose-gold text-white text-[10px] font-semibold py-1.5 rounded-lg hover:bg-rose-gold-dark transition-colors"
+              >
+                Looks good, plan my trip
+              </button>
+            </div>
+          </div>
+        )}
 
         {isLoading && (
           <div className="flex justify-start">
@@ -182,7 +242,7 @@ export default function ChatPanel() {
           />
           <button
             onClick={() => sendMessage()}
-            disabled={!input.trim() || isLoading}
+            disabled={!input.trim() || isLoading || !!pendingConfirm}
             className="shrink-0 w-8 h-8 flex items-center justify-center bg-rose-gold rounded-lg disabled:opacity-40 hover:bg-rose-gold-dark transition-colors"
           >
             <svg width="14" height="14" fill="none" stroke="white" strokeWidth="2.5" viewBox="0 0 24 24">

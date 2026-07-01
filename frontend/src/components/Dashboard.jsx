@@ -8,7 +8,7 @@ import BudgetTab from './BudgetTab'
 import CityEditor from './CityEditor'
 import useTripStore from '../store/tripStore'
 
-const TABS = ['Itinerary', 'Flights', 'Hotels', 'Cities', 'Transport', 'Budget']
+const TABS = ['Itinerary', 'Flights', 'Hotels', 'Cities', 'Ground Transport', 'Budget']
 
 // TODO: Add Share Trip button that generates a shareable link via Supabase short URLs
 // TODO: Add Export PDF button that calls POST /confirm with pdf_only=true flag
@@ -130,9 +130,9 @@ export default function Dashboard() {
           </div>
         )}
 
-        {activeTab === 'Cities'    && <CityEditor />}
-        {activeTab === 'Transport' && <TransportTab />}
-        {activeTab === 'Budget'    && <BudgetTab />}
+        {activeTab === 'Cities'            && <CityEditor />}
+        {activeTab === 'Ground Transport' && <TransportTab />}
+        {activeTab === 'Budget'            && <BudgetTab />}
       </div>
     </div>
   )

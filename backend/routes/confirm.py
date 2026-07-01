@@ -24,12 +24,26 @@ async def confirm_trip(request: ConfirmRequest):
 
     # Persist to Supabase — failure is non-fatal; booking reference is still returned
     try:
+        cities = request.trip_data.get("cities", [])
+
+        if len(cities) == 1:
+            destination = cities[0].get("name", "")
+        elif len(cities) > 1:
+            destination = " → ".join(c.get("name", "") for c in cities)
+        else:
+            destination = ""
+
+        first_days     = cities[0].get("days", [])  if cities else []
+        last_days      = cities[-1].get("days", []) if cities else []
+        departure_date = first_days[0].get("date")  if first_days else None
+        return_date    = last_days[-1].get("date")   if last_days  else None
+
         trip_row = {
             "user_id": request.user_id,
-            "destination": request.trip_data.get("destination", "") or "",
-            "departure_date": request.trip_data.get("departure_date"),
-            "return_date": request.trip_data.get("return_date"),
-            "itinerary": request.trip_data.get("days", []),
+            "destination": destination,
+            "departure_date": departure_date,
+            "return_date": return_date,
+            "itinerary": cities,
             "flights": [f.model_dump(exclude_none=True) for f in request.selected_flights],
             "hotels": [h.model_dump(exclude_none=True) for h in request.selected_hotels],
             "status": "confirmed",
@@ -47,6 +61,7 @@ async def confirm_trip(request: ConfirmRequest):
                 "details": {
                     "flights": [f.model_dump() for f in request.selected_flights],
                     "hotels": [h.model_dump() for h in request.selected_hotels],
+                    "ground_transport": [gt.model_dump() for gt in request.selected_ground_transport],
                 },
                 "booking_reference": booking_reference,
                 "total_cost": request.total_cost,
@@ -76,6 +91,7 @@ async def confirm_trip(request: ConfirmRequest):
                 pdf_bytes,
                 selected_flights=request.selected_flights,
                 selected_hotels=request.selected_hotels,
+                selected_ground_transport=request.selected_ground_transport,
                 total_cost=request.total_cost,
             )
     except Exception:

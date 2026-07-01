@@ -7,7 +7,9 @@ import Landing from './pages/Landing'
 import Auth    from './pages/Auth'
 import Search  from './pages/Search'
 import Plan    from './pages/Plan'
-import Confirm from './pages/Confirm'
+import Confirm  from './pages/Confirm'
+import Profile  from './pages/Profile'
+import Trips    from './pages/Trips'
 
 function ProtectedRoute({ children }) {
   const [status, setStatus] = useState('checking')
@@ -43,6 +45,8 @@ export default function App() {
         <Route path="/search" element={<ProtectedRoute><Search /></ProtectedRoute>} />
         <Route path="/plan"   element={<ProtectedRoute><Plan /></ProtectedRoute>} />
         <Route path="/confirm" element={<ProtectedRoute><Confirm /></ProtectedRoute>} />
+        <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
+        <Route path="/trips"   element={<ProtectedRoute><Trips /></ProtectedRoute>} />
         <Route path="*"       element={<Navigate to="/" replace />} />
       </Routes>
     </div>

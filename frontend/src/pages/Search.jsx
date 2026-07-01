@@ -64,6 +64,22 @@ export default function Search() {
       <div className="absolute inset-0 dot-grid opacity-40 pointer-events-none" />
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[400px] glow-rose pointer-events-none" />
 
+      {/* Nav — top left */}
+      <div className="absolute top-6 left-6 z-10 flex items-center gap-2">
+        <button
+          onClick={() => navigate('/profile')}
+          className="flex items-center gap-2 px-4 py-2.5 bg-[#0F0D12] border border-[#1E1B25] rounded-xl text-sm text-[#8A7A72] hover:border-rose-gold/40 hover:text-[#F0ECE8] transition-colors"
+        >
+          My profile
+        </button>
+        <button
+          onClick={() => navigate('/trips')}
+          className="flex items-center gap-2 px-4 py-2.5 bg-[#0F0D12] border border-[#1E1B25] rounded-xl text-sm text-[#8A7A72] hover:border-rose-gold/40 hover:text-[#F0ECE8] transition-colors"
+        >
+          Trip history
+        </button>
+      </div>
+
       {/* Previous trip card — top right */}
       {prevTrip && (
         <button

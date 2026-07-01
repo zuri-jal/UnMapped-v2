@@ -3,7 +3,6 @@ import ChatPanel   from '../components/ChatPanel'
 import CenterPanel from '../components/CenterPanel'
 import RightPanel  from '../components/RightPanel'
 import useTripStore from '../store/tripStore'
-import { planTrip } from '../services/api'
 
 function nextDeparture() {
   const d = new Date()
@@ -47,23 +46,19 @@ function parseQuery(q) {
 }
 
 export default function Plan() {
-  const { pendingQuery, setPendingQuery, setTripData, addMessage, setLoading } = useTripStore()
+  const { pendingQuery, setPendingQuery, addMessage, setPendingPlanConfirm } = useTripStore()
 
   useEffect(() => {
     if (!pendingQuery) return
     const query = pendingQuery
     setPendingQuery(null)
+    const parsed = parseQuery(query)
     addMessage('user', query)
-    setLoading(true)
-
-    planTrip(parseQuery(query)).then(({ data, error }) => {
-      if (error) {
-        addMessage('assistant', `Sorry, something went wrong: ${error}`)
-      } else if (data) {
-        setTripData(data)
-        addMessage('assistant', data.summary ?? "Here's your trip! Explore the map and panels.")
-      }
-      setLoading(false)
+    setPendingPlanConfirm({
+      message: query,
+      departDate: parsed.departure_date,
+      durationDays: parsed.duration_days,
+      travelStyle: parsed.travel_style,
     })
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 

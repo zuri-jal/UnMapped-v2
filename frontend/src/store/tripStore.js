@@ -4,17 +4,29 @@ const _darkInit = (() => {
   try { return localStorage.getItem('unmapped-dark') !== 'false' } catch { return true }
 })()
 
-function calcTotal(tripData, flightIds) {
-  const cities  = tripData?.cities  ?? []
-  const flights = tripData?.flights ?? []
+function calcTotal(tripData, flightIds, gtIds) {
+  const cities     = tripData?.cities          ?? []
+  const flights    = tripData?.flights         ?? []
+  const groundLegs = tripData?.ground_transport ?? []
+
   const flightCost = Object.values(flightIds).reduce((sum, fId) => {
     const f = flights.find((fl) => (fl.flight_number || fl.offer_id || '') === fId)
     return sum + Number(f?.price_usd ?? 0)
   }, 0)
+
+  const gtCost = Object.entries(gtIds).reduce((sum, [legKey, optId]) => {
+    const [from, ...toParts] = legKey.split(' → ')
+    const to = toParts.join(' → ')
+    const gtLeg = groundLegs.find((gl) => gl.leg_from === from && gl.leg_to === to)
+    const opt   = gtLeg?.options?.find((o) => o.id === optId)
+    return sum + Number(opt?.price_usd ?? 0)
+  }, 0)
+
   const hotelCost = cities.reduce((sum, city) => {
     return sum + Number(city.hotel?.price_per_night_usd ?? 0) * (city.day_count ?? 0)
   }, 0)
-  return flightCost + hotelCost
+
+  return flightCost + gtCost + hotelCost
 }
 
 const useTripStore = create((set) => ({
@@ -22,22 +34,45 @@ const useTripStore = create((set) => ({
   messages: [],
   // Per-leg flight selection: { "City A → City B": "flightIdentifier" }
   selectedFlightIds: {},
+  // Per-leg ground transport selection: { "City A → City B": "optionId" }
+  selectedGroundTransportIds: {},
   totalCost: 0,
   isLoading: false,
   isConfirming: false,
   darkMode: _darkInit,
   pendingQuery: null,
+  pendingPlanConfirm: null,
 
   setTripData: (tripData) =>
-    set({ tripData, selectedFlightIds: {}, totalCost: 0 }),
+    set({ tripData, selectedFlightIds: {}, selectedGroundTransportIds: {}, totalCost: 0 }),
 
   addMessage: (role, content) =>
     set((s) => ({ messages: [...s.messages, { role, content }] })),
 
+  // Selecting a flight clears any ground transport choice for the same leg
   selectFlight: (legKey, id) =>
     set((s) => {
-      const newIds = { ...s.selectedFlightIds, [legKey]: id }
-      return { selectedFlightIds: newIds, totalCost: calcTotal(s.tripData, newIds) }
+      const newFlightIds = { ...s.selectedFlightIds, [legKey]: id }
+      const newGtIds     = { ...s.selectedGroundTransportIds }
+      delete newGtIds[legKey]
+      return {
+        selectedFlightIds: newFlightIds,
+        selectedGroundTransportIds: newGtIds,
+        totalCost: calcTotal(s.tripData, newFlightIds, newGtIds),
+      }
+    }),
+
+  // Selecting ground transport clears any flight choice for the same leg
+  selectGroundTransport: (legKey, id) =>
+    set((s) => {
+      const newGtIds     = { ...s.selectedGroundTransportIds, [legKey]: id }
+      const newFlightIds = { ...s.selectedFlightIds }
+      delete newFlightIds[legKey]
+      return {
+        selectedGroundTransportIds: newGtIds,
+        selectedFlightIds: newFlightIds,
+        totalCost: calcTotal(s.tripData, newFlightIds, newGtIds),
+      }
     }),
 
   reorderCities: (fromIdx, toIdx) =>
@@ -72,6 +107,7 @@ const useTripStore = create((set) => ({
   setConfirming: (v) => set({ isConfirming: v }),
 
   setPendingQuery: (q) => set({ pendingQuery: q }),
+  setPendingPlanConfirm: (v) => set({ pendingPlanConfirm: v }),
 
   toggleDarkMode: () =>
     set((s) => {
@@ -87,6 +123,7 @@ const useTripStore = create((set) => ({
       isLoading: false,
       isConfirming: false,
       selectedFlightIds: {},
+      selectedGroundTransportIds: {},
       totalCost: 0,
     }),
 }))

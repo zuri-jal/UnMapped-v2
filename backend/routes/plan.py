@@ -7,8 +7,9 @@ from models.response_models import CityItinerary, TripResponse
 from services.nlp_service import extract_origin
 from services.openai_service import generate_itinerary
 from services.duffel_service import search_flights, search_hotels
-from services.supabase_service import get_user_profile
+from services.supabase_service import get_user_profile, supabase
 from services.discovery_service import get_hidden_gems
+from services.ground_transport_service import get_ground_transport
 from utils.city_detection import detect_cities, distribute_days, extract_country, lookup_country
 
 router = APIRouter()
@@ -115,6 +116,10 @@ async def plan_trip(request: TripRequest):
         city_days  = all_days[day_offset: day_offset + day_counts[i]]
         day_offset += day_counts[i]
 
+        # Overwrite AI-generated date strings with deterministically-computed dates
+        for j, day in enumerate(city_days):
+            day["date"] = str(city_start_dates[i] + timedelta(days=j))
+
         hotels_list = hotel_results[i] if not isinstance(hotel_results[i], Exception) else []
         hotel       = hotels_list[0] if hotels_list else None
 
@@ -136,6 +141,54 @@ async def plan_trip(request: TripRequest):
             hotel=hotel,
         ))
 
+    # --- Ground transport for qualifying domestic legs (multi-city only) ---
+    # Threshold: 50–800 km driving distance AND ≤8 h driving duration (enforced in service).
+    ground_transport: list[dict] = []
+    if n > 1:
+        # Country for the origin: lookup from the city name string
+        from_countries = [lookup_country(flight_froms[0])] + [
+            city_itineraries[i].country for i in range(n - 1)
+        ]
+        to_countries = [city_itineraries[i].country for i in range(n)]
+
+        import pathlib
+        _log_path = pathlib.Path(__file__).parent.parent / "_gt_debug.log"
+        def _plog(msg):
+            print(msg, flush=True)
+            with open(_log_path, "a", encoding="utf-8") as _f:
+                _f.write(msg + "\n")
+
+        _plog("[GT-PLAN] All legs considered for ground transport:")
+        for i in range(n):
+            same = (from_countries[i] or "").lower() == (to_countries[i] or "").lower()
+            _plog(f"  leg {i}: {flight_froms[i]} ({from_countries[i]}) → {flight_tos[i]} ({to_countries[i]}) — same_country={same}")
+
+        gt_inputs = [
+            (flight_froms[i], flight_tos[i])
+            for i in range(n)
+            if from_countries[i]
+            and to_countries[i]
+            and from_countries[i].lower() == to_countries[i].lower()
+        ]
+        _plog(f"[GT-PLAN] Domestic legs passed to get_ground_transport: {gt_inputs}")
+
+        if gt_inputs:
+            gt_results = await asyncio.gather(
+                *[get_ground_transport(fc, tc) for fc, tc in gt_inputs],
+                return_exceptions=True,
+            )
+            _plog(f"[GT-PLAN] Raw gt_results: {gt_results}")
+            ground_transport = [
+                r for r in gt_results
+                if r is not None and not isinstance(r, Exception)
+            ]
+
+    import pathlib as _pl
+    _lp = _pl.Path(__file__).parent.parent / "_gt_debug.log"
+    with open(_lp, "a", encoding="utf-8") as _f:
+        _f.write(f"[GT-PLAN] Final ground_transport returned: {ground_transport}\n")
+    print(f"[GT-PLAN] Final ground_transport returned: {ground_transport}", flush=True)
+
     # --- Flatten flight legs: tag each offer with from/to ---
     flat_flights: list[dict] = []
     for i, offers in enumerate(flight_results):
@@ -149,12 +202,46 @@ async def plan_trip(request: TripRequest):
         for offer in offers:
             flat_flights.append({"from": flight_froms[i], "to": flight_tos[i], **offer})
 
-    return TripResponse(
+    trip_response = TripResponse(
         summary=itinerary_result.get("summary", ""),
         budget_breakdown=itinerary_result.get("budget_breakdown", {}),
         discovery_insights=itinerary_result.get("discovery_insights", []),
         hidden_gems=hidden_gems,
         cities=city_itineraries,
         flights=flat_flights,
+        ground_transport=ground_transport,
         suggested_route_order=None,  # geographic reordering out of scope; null = input order is suggested
     )
+
+    if request.user_id:
+        dest    = city_names[0] if len(city_names) == 1 else " → ".join(city_names)
+        ret_str = str(city_start_dates[-1] + timedelta(days=day_counts[-1]))
+
+        async def _save_planned(
+            uid=request.user_id,
+            d=dest,
+            dep=str(city_start_dates[0]),
+            ret=ret_str,
+            itin=[c.model_dump() for c in city_itineraries],
+            fl=flat_flights,
+            sm=itinerary_result.get("summary", ""),
+        ):
+            try:
+                await asyncio.to_thread(
+                    lambda: supabase.table("trips").insert({
+                        "user_id": uid,
+                        "destination": d,
+                        "departure_date": dep,
+                        "return_date": ret,
+                        "itinerary": {"cities": itin, "summary": sm},
+                        "flights": fl,
+                        "hotels": [],
+                        "status": "planned",
+                    }).execute()
+                )
+            except Exception:
+                pass
+
+        asyncio.create_task(_save_planned())
+
+    return trip_response
