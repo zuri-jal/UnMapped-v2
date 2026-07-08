@@ -6,6 +6,27 @@ BRAND_COLOR = (176, 112, 80)   # Rose gold #B07050
 BG_COLOR = (253, 250, 248)     # Warm white #FDFAF8
 TEXT_COLOR = (26, 26, 26)
 
+# fpdf2's core Helvetica font only reliably renders plain ASCII — anything outside
+# that range (curly quotes, em dashes, arrows) either drops or renders as a box glyph.
+_ASCII_REPLACEMENTS = {
+    "→": "->", "←": "<-",
+    "–": "-", "—": "-",
+    "‘": "'", "’": "'",
+    "“": '"', "”": '"',
+    "…": "...",
+    "•": "-",
+}
+
+
+def _ascii(text) -> str:
+    """Sanitise text to plain ASCII for the receipt PDF's core-font renderer."""
+    if text is None:
+        return ""
+    s = str(text)
+    for uni, repl in _ASCII_REPLACEMENTS.items():
+        s = s.replace(uni, repl)
+    return s.encode("ascii", "ignore").decode("ascii")
+
 
 class ItineraryPDF(FPDF):
     """Custom FPDF subclass with Unmapped branding."""
@@ -98,16 +119,16 @@ def _section_header_receipt(pdf: FPDF, title: str) -> None:
     pdf.set_fill_color(*BRAND_COLOR)
     pdf.set_text_color(255, 255, 255)
     pdf.set_font("Helvetica", "B", 10)
-    pdf.cell(0, 7, f"  {title}", fill=True, ln=True)
+    pdf.cell(0, 7, _ascii(f"  {title}"), fill=True, ln=True)
     pdf.set_text_color(*TEXT_COLOR)
     pdf.ln(1)
 
 
 def _label_value(pdf: FPDF, label: str, value: str) -> None:
     pdf.set_font("Helvetica", "B", 9)
-    pdf.cell(65, 6, label, ln=False)
+    pdf.cell(65, 6, _ascii(label), ln=False)
     pdf.set_font("Helvetica", "", 9)
-    pdf.cell(0, 6, value, ln=True)
+    pdf.cell(0, 6, _ascii(value), ln=True)
 
 
 def _parse_nights(check_in: str, check_out: str) -> int:
@@ -131,6 +152,46 @@ def _nights_for_hotel(hotel) -> int | None:
     return None
 
 
+def _trip_date_range(trip_data: dict) -> tuple[str | None, str | None]:
+    """Overall trip start/end date, from the first city's first day to the last city's last day."""
+    cities = (trip_data or {}).get("cities", [])
+    if not cities:
+        return None, None
+    first_days = cities[0].get("days", [])
+    last_days = cities[-1].get("days", [])
+    start = first_days[0].get("date") if first_days else None
+    end = last_days[-1].get("date") if last_days else None
+    return start, end
+
+
+def _city_departure_date(trip_data: dict, leg_from: str) -> str | None:
+    """The date a traveller leaves `leg_from`, taken from that city's last itinerary day.
+
+    Ground transport legs carry no date of their own (see ground_transport_service),
+    so this matches the leg's origin against trip_data["cities"] by name — city names
+    and leg_from/leg_to are built from the same source list in routes/plan.py.
+    """
+    if not trip_data or not leg_from:
+        return None
+    for city in trip_data.get("cities", []) or []:
+        if city.get("name") == leg_from:
+            days = city.get("days", [])
+            if days:
+                return days[-1].get("date")
+    return None
+
+
+def _flight_departure_date(flight, trip_data: dict) -> str | None:
+    """Departure date for a flight leg: parsed from its own timestamp when present
+    (Duffel offers carry a full ISO datetime), else derived from the origin city's dates."""
+    raw = getattr(flight, "departure_time", None)
+    if raw:
+        for sep in ("T", " "):
+            if sep in raw:
+                return raw.split(sep)[0]
+    return _city_departure_date(trip_data, getattr(flight, "leg_from", None))
+
+
 def generate_receipt(confirm_request, booking_reference: str) -> bytes:
     """Build a booking receipt PDF and return it as bytes."""
     flights          = confirm_request.selected_flights
@@ -140,6 +201,12 @@ def generate_receipt(confirm_request, booking_reference: str) -> bytes:
     pdf = ReceiptPDF(booking_reference=booking_reference)
     pdf.set_auto_page_break(auto=True, margin=20)
     pdf.add_page()
+
+    start_date, end_date = _trip_date_range(confirm_request.trip_data)
+    if start_date or end_date:
+        _section_header_receipt(pdf, "Trip Dates")
+        _label_value(pdf, "Travel Dates:", f"{start_date or '?'} - {end_date or '?'}")
+        pdf.ln(5)
 
     _section_header_receipt(pdf, "Passenger Information")
     _label_value(pdf, "Name:", confirm_request.passenger_name)
@@ -154,13 +221,16 @@ def generate_receipt(confirm_request, booking_reference: str) -> bytes:
             pdf.set_text_color(130, 130, 130)
             route = f"{flight.leg_from} -> {flight.leg_to}" if (flight.leg_from and flight.leg_to) else ""
             if len(flights) > 1:
-                pdf.cell(0, 6, f"  Leg {i}{': ' + route if route else ''}", ln=True)
+                pdf.cell(0, 6, _ascii(f"  Leg {i}{': ' + route if route else ''}"), ln=True)
             elif route:
-                pdf.cell(0, 6, f"  {route}", ln=True)
+                pdf.cell(0, 6, _ascii(f"  {route}"), ln=True)
             pdf.set_text_color(*TEXT_COLOR)
             _label_value(pdf, "Airline:", flight.airline)
             if flight.flight_number:
                 _label_value(pdf, "Flight Number:", flight.flight_number)
+            leg_date = _flight_departure_date(flight, confirm_request.trip_data)
+            if leg_date:
+                _label_value(pdf, "Date:", leg_date)
             _label_value(pdf, "Departure:", flight.departure_time)
             _label_value(pdf, "Arrival:", flight.arrival_time)
             if flight.duration:
@@ -178,10 +248,13 @@ def generate_receipt(confirm_request, booking_reference: str) -> bytes:
             pdf.set_font("Helvetica", "I", 9)
             pdf.set_text_color(130, 130, 130)
             leg_prefix = f"Leg {i}: " if len(ground_transport) > 1 else ""
-            pdf.cell(0, 6, f"  {leg_prefix}{gt.leg_from} -> {gt.leg_to}", ln=True)
+            pdf.cell(0, 6, _ascii(f"  {leg_prefix}{gt.leg_from} -> {gt.leg_to}"), ln=True)
             pdf.set_text_color(*TEXT_COLOR)
             _label_value(pdf, "Mode:", gt.mode.title())
             _label_value(pdf, "Operator:", gt.operator)
+            leg_date = _city_departure_date(confirm_request.trip_data, gt.leg_from)
+            if leg_date:
+                _label_value(pdf, "Date:", leg_date)
             _label_value(pdf, "Departure:", gt.departure_time)
             _label_value(pdf, "Arrival:", gt.arrival_time)
             _label_value(pdf, "Duration:", gt.duration)
@@ -196,7 +269,7 @@ def generate_receipt(confirm_request, booking_reference: str) -> bytes:
         if len(hotels) > 1:
             pdf.set_font("Helvetica", "I", 9)
             pdf.set_text_color(130, 130, 130)
-            pdf.cell(0, 6, f"  City {i}: {hotel.location}", ln=True)
+            pdf.cell(0, 6, _ascii(f"  City {i}: {hotel.location}"), ln=True)
             pdf.set_text_color(*TEXT_COLOR)
         _label_value(pdf, "Hotel:", hotel.name)
         _label_value(pdf, "Location:", hotel.location)
@@ -230,6 +303,33 @@ def generate_receipt(confirm_request, booking_reference: str) -> bytes:
     pdf.cell(65, 8, "Grand Total:", ln=False)
     pdf.cell(0, 8, f"${confirm_request.total_cost:,.2f} USD", ln=True)
     pdf.set_text_color(*TEXT_COLOR)
+
+    # ── Full day-by-day itinerary, grouped by city ────────────────────────────
+    cities = (confirm_request.trip_data or {}).get("cities", [])
+    if cities:
+        pdf.ln(4)
+        _section_header_receipt(pdf, "Your Itinerary")
+        for city in cities:
+            pdf.set_font("Helvetica", "B", 10)
+            pdf.set_text_color(*BRAND_COLOR)
+            pdf.cell(0, 7, _ascii(city.get("name", "")), ln=True)
+            pdf.set_text_color(*TEXT_COLOR)
+            for day in city.get("days", []):
+                pdf.set_font("Helvetica", "B", 9)
+                pdf.cell(0, 6, _ascii(f"Day {day.get('day', '?')} - {day.get('date', '')}"), ln=True)
+                pdf.set_font("Helvetica", "", 9)
+                for period, label in (("morning", "Morning"), ("afternoon", "Afternoon"), ("evening", "Evening")):
+                    value = day.get(period)
+                    if value:
+                        # Reset margins/x before multi_cell — a page break triggered mid-loop
+                        # (via header()) can otherwise leave the cursor with zero/negative
+                        # usable width, raising FPDFException.
+                        pdf.set_left_margin(15)
+                        pdf.set_right_margin(15)
+                        pdf.set_x(15)
+                        pdf.multi_cell(0, 5, _ascii(f"  {label}: {value}"))
+                pdf.ln(2)
+            pdf.ln(2)
 
     return bytes(pdf.output())
 

@@ -1,6 +1,7 @@
 import asyncio
 import random
 import string
+import traceback
 
 from fastapi import APIRouter
 
@@ -64,21 +65,24 @@ async def confirm_trip(request: ConfirmRequest):
                     "ground_transport": [gt.model_dump() for gt in request.selected_ground_transport],
                 },
                 "booking_reference": booking_reference,
-                "total_cost": request.total_cost,
                 "status": "confirmed",
             }
             await asyncio.to_thread(
                 lambda: supabase.table("bookings").insert(booking_row).execute()
             )
-    except Exception:
-        pass
+    except Exception as e:
+        # TEMP DEBUG LOGGING — remove once email-delivery investigation is closed
+        print(f"[confirm] Supabase persistence FAILED: {type(e).__name__}: {e}")
+        traceback.print_exc()
 
     # Generate PDF receipt — failure is non-fatal
     pdf_bytes = None
     try:
         pdf_bytes = generate_receipt(request, booking_reference)
-    except Exception:
-        pass
+    except Exception as e:
+        # TEMP DEBUG LOGGING — remove once email-delivery investigation is closed
+        print(f"[confirm] PDF generation FAILED: {type(e).__name__}: {e}")
+        traceback.print_exc()
 
     # Send confirmation email — failure is non-fatal
     email_sent = False
@@ -93,9 +97,14 @@ async def confirm_trip(request: ConfirmRequest):
                 selected_hotels=request.selected_hotels,
                 selected_ground_transport=request.selected_ground_transport,
                 total_cost=request.total_cost,
+                trip_data=request.trip_data,
             )
-    except Exception:
-        pass
+        else:
+            print("[confirm] Skipping email send: pdf_bytes is None (PDF generation failed above)")
+    except Exception as e:
+        # TEMP DEBUG LOGGING — remove once email-delivery investigation is closed
+        print(f"[confirm] Email send FAILED: {type(e).__name__}: {e}")
+        traceback.print_exc()
 
     return {
         "booking_reference": booking_reference,

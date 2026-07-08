@@ -2,13 +2,6 @@ import React, { useRef, useEffect, useState } from 'react'
 import useTripStore from '../store/tripStore'
 import { planTrip } from '../services/api'
 
-const STYLE_CHIPS = ['Adventure', 'Food', 'Luxury', 'Hidden gems', 'Culture', 'Relaxation']
-const PROMPTS = [
-  '7 days in Japan under $2500',
-  'Beach holiday in Southeast Asia',
-  'European city break this autumn',
-  'Hidden gems in South America',
-]
 const LOADING_MSGS = [
   'Finding flights...',
   'Checking what travelers are saying...',
@@ -30,7 +23,6 @@ export default function ChatPanel() {
   } = useTripStore()
 
   const [input, setInput]                   = useState('')
-  const [activeStyles, setStyles]           = useState([])
   const [loadingText, setLoadingTxt]        = useState(LOADING_MSGS[0])
   const [pendingConfirm, setPendingConfirm] = useState(null)
   const [departDate, setDepartDate]         = useState('')
@@ -60,13 +52,8 @@ export default function ChatPanel() {
     return () => clearInterval(iv)
   }, [isLoading])
 
-  const toggleStyle = (s) =>
-    setStyles((prev) =>
-      prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s]
-    )
-
-  const sendMessage = (text) => {
-    const msg = (text ?? input).trim()
+  const sendMessage = () => {
+    const msg = input.trim()
     if (!msg || pendingConfirm) return
     setInput('')
     addMessage('user', msg)
@@ -74,7 +61,7 @@ export default function ChatPanel() {
     const m = msg.match(/\b(\d+)\s*-?\s*days?\b/i)
     setDurationDays(m ? Math.max(1, Math.min(30, parseInt(m[1]))) : 7)
     setDepartDate(nextDeparture())
-    setPendingConfirm({ message: msg, travelStyle: activeStyles.length ? activeStyles.join(', ') : 'adventure' })
+    setPendingConfirm({ message: msg, travelStyle: 'adventure' })
   }
 
   const confirmAndPlan = async () => {
@@ -190,44 +177,6 @@ export default function ChatPanel() {
         )}
         <div ref={bottomRef} />
       </div>
-
-      {/* Travel style chips */}
-      <div className="px-3 py-2 border-t border-[#1E1B25] shrink-0">
-        <p className="text-[10px] text-[#8A7A72] mb-1.5">Travel style</p>
-        <div className="flex flex-wrap gap-1">
-          {STYLE_CHIPS.map((s) => (
-            <button
-              key={s}
-              onClick={() => toggleStyle(s)}
-              className={`text-[10px] px-2 py-0.5 rounded-full border transition-colors ${
-                activeStyles.includes(s)
-                  ? 'bg-rose-gold border-rose-gold text-white'
-                  : 'border-[#1E1B25] text-[#8A7A72] hover:border-rose-gold/50'
-              }`}
-            >
-              {s}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Suggested prompts — only before any messages */}
-      {messages.length === 0 && !isLoading && (
-        <div className="px-3 pb-2 shrink-0">
-          <p className="text-[10px] text-[#8A7A72] mb-1.5">Try asking</p>
-          <div className="space-y-1">
-            {PROMPTS.map((p) => (
-              <button
-                key={p}
-                onClick={() => sendMessage(p)}
-                className="w-full text-left text-[10px] px-2.5 py-1.5 rounded-lg bg-[#0F0D12] border border-[#1E1B25] text-[#8A7A72] hover:border-rose-gold/50 hover:text-[#F0ECE8] transition-colors truncate"
-              >
-                {p}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
 
       {/* Input */}
       <div className="px-3 pb-3 pt-2 border-t border-[#1E1B25] shrink-0">

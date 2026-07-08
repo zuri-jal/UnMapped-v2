@@ -1,16 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { supabase } from '../services/supabase'
+import { supabase, signOut } from '../services/supabase'
 import useTripStore from '../store/tripStore'
-
-const CHIPS = [
-  'Weekend escape',
-  'Beach destinations',
-  'Adventure trips',
-  'City breaks',
-  'Hidden gems',
-  'Visa-free',
-]
 
 function PlaneIcon() {
   return (
@@ -50,11 +41,16 @@ export default function Search() {
     || user?.email?.split('@')[0]
     || 'Explorer'
 
-  const submit = (q) => {
-    const trimmed = (q ?? query).trim()
+  const submit = () => {
+    const trimmed = query.trim()
     if (!trimmed) return
     setPendingQuery(trimmed)
     navigate('/plan')
+  }
+
+  const handleSignOut = async () => {
+    await signOut()
+    navigate('/auth')
   }
 
   return (
@@ -77,6 +73,12 @@ export default function Search() {
           className="flex items-center gap-2 px-4 py-2.5 bg-[#0F0D12] border border-[#1E1B25] rounded-xl text-sm text-[#8A7A72] hover:border-rose-gold/40 hover:text-[#F0ECE8] transition-colors"
         >
           Trip history
+        </button>
+        <button
+          onClick={handleSignOut}
+          className="flex items-center gap-2 px-4 py-2.5 bg-[#0F0D12] border border-[#1E1B25] rounded-xl text-sm text-[#8A7A72] hover:border-rose-gold/40 hover:text-[#F0ECE8] transition-colors"
+        >
+          Sign out
         </button>
       </div>
 
@@ -122,19 +124,6 @@ export default function Search() {
             Explore
           </button>
         </form>
-
-        {/* Quick chips */}
-        <div className="flex flex-wrap gap-2 mt-5 justify-center">
-          {CHIPS.map((chip) => (
-            <button
-              key={chip}
-              onClick={() => submit(chip)}
-              className="px-4 py-1.5 text-sm bg-[#0F0D12] border border-[#1E1B25] rounded-full text-[#8A7A72] hover:border-rose-gold/50 hover:text-[#F0ECE8] transition-colors"
-            >
-              {chip}
-            </button>
-          ))}
-        </div>
       </div>
     </div>
   )

@@ -35,7 +35,7 @@ api.interceptors.response.use(
 
 export async function planTrip(data) {
   try {
-    const res = await api.post('/plan', data)
+    const res = await api.post('/plan/', data)
     return { data: res.data, error: null }
   } catch (err) {
     return { data: null, error: err.message ?? 'Request failed' }
@@ -44,7 +44,7 @@ export async function planTrip(data) {
 
 export async function updateTrip(data) {
   try {
-    const res = await api.post('/update', data)
+    const res = await api.post('/update/', data)
     return { data: res.data, error: null }
   } catch (err) {
     return { data: null, error: err.message ?? 'Request failed' }
@@ -53,7 +53,7 @@ export async function updateTrip(data) {
 
 export async function confirmTrip(data) {
   try {
-    const res = await api.post('/confirm', data)
+    const res = await api.post('/confirm/', data)
     return { data: res.data, error: null }
   } catch (err) {
     return { data: null, error: err.message ?? 'Request failed' }
@@ -98,7 +98,7 @@ export async function getTrip(tripId, userId) {
 
 export async function getDiscovery(data = {}) {
   try {
-    const res = await api.post('/discover', data)
+    const res = await api.post('/discover/', data)
     return { data: res.data, error: null }
   } catch (err) {
     return { data: null, error: err.message ?? 'Request failed' }

@@ -31,6 +31,7 @@ async def send_confirmation_email(
     selected_hotels=None,
     selected_ground_transport=None,
     total_cost: float = None,
+    trip_data: dict = None,
 ) -> bool:
     """Send booking confirmation email with PDF receipt attached."""
     print(f"[email_service] to:   {passenger_email}")
@@ -51,6 +52,7 @@ async def send_confirmation_email(
                 selected_hotels=selected_hotels,
                 selected_ground_transport=selected_ground_transport,
                 total_cost=total_cost,
+                trip_data=trip_data,
             ),
         )
 
@@ -99,6 +101,81 @@ async def send_welcome_email(to_email: str, user_name: str) -> bool:
     pass
 
 
+def _trip_date_range(trip_data: dict) -> tuple:
+    """Overall trip start/end date, from the first city's first day to the last city's last day."""
+    cities = (trip_data or {}).get("cities", [])
+    if not cities:
+        return None, None
+    first_days = cities[0].get("days", [])
+    last_days = cities[-1].get("days", [])
+    start = first_days[0].get("date") if first_days else None
+    end = last_days[-1].get("date") if last_days else None
+    return start, end
+
+
+def _city_departure_date(trip_data: dict, leg_from: str):
+    """The date a traveller leaves `leg_from`, taken from that city's last itinerary day.
+
+    Ground transport legs carry no date of their own (see ground_transport_service),
+    so this matches the leg's origin against trip_data["cities"] by name — city names
+    and leg_from/leg_to are built from the same source list in routes/plan.py.
+    """
+    if not trip_data or not leg_from:
+        return None
+    for city in trip_data.get("cities", []) or []:
+        if city.get("name") == leg_from:
+            days = city.get("days", [])
+            if days:
+                return days[-1].get("date")
+    return None
+
+
+def _flight_departure_date(flight, trip_data: dict):
+    """Departure date for a flight leg: parsed from its own timestamp when present
+    (Duffel offers carry a full ISO datetime), else derived from the origin city's dates."""
+    raw = getattr(flight, "departure_time", None)
+    if raw:
+        for sep in ("T", " "):
+            if sep in raw:
+                return raw.split(sep)[0]
+    return _city_departure_date(trip_data, getattr(flight, "leg_from", None))
+
+
+def _itinerary_days_html(trip_data: dict) -> str:
+    """Full day-by-day itinerary section, grouped by city."""
+    cities = (trip_data or {}).get("cities", [])
+    if not cities:
+        return ""
+    city_blocks = ""
+    for city in cities:
+        day_blocks = ""
+        for day in city.get("days", []):
+            day_blocks += f"""
+            <div style="margin-bottom:14px;">
+              <p style="margin:0 0 4px;font-weight:bold;color:#1a1a1a;font-size:13px;">
+                Day {day.get('day', '?')} &mdash; {day.get('date', '')}
+              </p>
+              <p style="margin:0;color:#444;font-size:12px;line-height:1.6;">
+                <strong>Morning:</strong> {day.get('morning', '—')}<br>
+                <strong>Afternoon:</strong> {day.get('afternoon', '—')}<br>
+                <strong>Evening:</strong> {day.get('evening', '—')}
+              </p>
+            </div>
+            """
+        city_blocks += f"""
+        <div style="margin-bottom:20px;">
+          <p style="color:#B07050;font-weight:bold;font-size:14px;margin:0 0 8px;">{city.get('name', '')}</p>
+          {day_blocks}
+        </div>
+        """
+    return f"""
+    <h3 style="color:#1a1a1a;font-size:14px;margin:24px 0 8px;text-transform:uppercase;
+               letter-spacing:1px;">Your Itinerary</h3>
+    {city_blocks}
+    <hr style="border:none;border-top:1px solid #F5F0EE;margin:24px 0;">
+    """
+
+
 def _confirmation_html_body(
     passenger_name: str,
     booking_reference: str,
@@ -106,9 +183,10 @@ def _confirmation_html_body(
     selected_hotels=None,
     selected_ground_transport=None,
     total_cost: float = None,
+    trip_data: dict = None,
 ) -> str:
-    flights_html = _flights_summary_html(selected_flights or [])
-    gt_html      = _ground_transport_summary_html(selected_ground_transport or [])
+    flights_html = _flights_summary_html(selected_flights or [], trip_data)
+    gt_html      = _ground_transport_summary_html(selected_ground_transport or [], trip_data)
     hotels_html  = _hotels_summary_html(selected_hotels or [])
     total_html   = (
         f'<p style="color:#B07050;font-size:16px;font-weight:bold;margin:16px 0 0;">'
@@ -127,6 +205,14 @@ def _confirmation_html_body(
         <hr style="border:none;border-top:1px solid #F5F0EE;margin:24px 0;">
         """
 
+    start_date, end_date = _trip_date_range(trip_data)
+    dates_html = (
+        f'<p style="color:#666;font-size:13px;margin:0 0 20px;">'
+        f'<strong>Travel dates:</strong> {start_date or "TBD"} &rarr; {end_date or "TBD"}</p>'
+    ) if (start_date or end_date) else ""
+
+    itinerary_html = _itinerary_days_html(trip_data)
+
     return f"""
     <div style="font-family:Helvetica,Arial,sans-serif;max-width:600px;margin:0 auto;background:#FDFAF8;">
       <div style="background:#B07050;padding:32px;text-align:center;">
@@ -139,11 +225,13 @@ def _confirmation_html_body(
           Great news &mdash; your trip has been confirmed! Your full booking receipt is
           attached to this email as a PDF. Please save it for your records.
         </p>
+        {dates_html}
         <div style="background:#F5F0EE;border-left:4px solid #B07050;border-radius:4px;padding:16px 20px;margin:24px 0;">
           <p style="margin:0;font-size:12px;color:#888;text-transform:uppercase;letter-spacing:1px;">Booking Reference</p>
           <p style="margin:6px 0 0;font-size:22px;font-weight:bold;color:#B07050;">{booking_reference}</p>
         </div>
         {trip_section}
+        {itinerary_html}
         <p style="color:#444;line-height:1.6;">
           Your receipt is attached as <strong>booking_receipt.pdf</strong> and includes
           your complete flight and hotel details.
@@ -169,7 +257,7 @@ _TD_STYLE = "padding:6px 10px;border-bottom:1px solid #F5F0EE;color:#333;"
 _TD_ALT   = "padding:6px 10px;border-bottom:1px solid #F5F0EE;color:#333;background:#FDFAF8;"
 
 
-def _flights_summary_html(flights: list) -> str:
+def _flights_summary_html(flights: list, trip_data: dict = None) -> str:
     if not flights:
         return ""
     rows = ""
@@ -180,6 +268,7 @@ def _flights_summary_html(flights: list) -> str:
         leg_from = getattr(f, "leg_from", None) or ""
         leg_to   = getattr(f, "leg_to",   None) or ""
         route    = f"{leg_from} → {leg_to}" if (leg_from and leg_to) else "—"
+        leg_date = _flight_departure_date(f, trip_data) or "—"
         dep      = getattr(f, "departure_time", "—")
         arr      = getattr(f, "arrival_time",   "—")
         price    = getattr(f, "price_usd", 0)
@@ -189,6 +278,7 @@ def _flights_summary_html(flights: list) -> str:
             f'<td style="{td}">{route}</td>'
             f'<td style="{td}">{airline}</td>'
             f'<td style="{td}">{fn}</td>'
+            f'<td style="{td}">{leg_date}</td>'
             f'<td style="{td}">{dep}</td>'
             f'<td style="{td}">{arr}</td>'
             f'<td style="{td}">${price:,.2f}</td>'
@@ -202,6 +292,7 @@ def _flights_summary_html(flights: list) -> str:
         f'<th style="{_TH_STYLE}">Route</th>'
         f'<th style="{_TH_STYLE}">Airline</th>'
         f'<th style="{_TH_STYLE}">Flight</th>'
+        f'<th style="{_TH_STYLE}">Date</th>'
         f'<th style="{_TH_STYLE}">Departs</th>'
         f'<th style="{_TH_STYLE}">Arrives</th>'
         f'<th style="{_TH_STYLE}">Price</th>'
@@ -244,7 +335,7 @@ def _hotels_summary_html(hotels: list) -> str:
     )
 
 
-def _ground_transport_summary_html(ground_transport: list) -> str:
+def _ground_transport_summary_html(ground_transport: list, trip_data: dict = None) -> str:
     if not ground_transport:
         return ""
     rows = ""
@@ -254,6 +345,7 @@ def _ground_transport_summary_html(ground_transport: list) -> str:
         leg_to   = getattr(gt, "leg_to",   "—")
         mode     = getattr(gt, "mode",      "—").title()
         operator = getattr(gt, "operator",  "—")
+        leg_date = _city_departure_date(trip_data, getattr(gt, "leg_from", None)) or "—"
         dep      = getattr(gt, "departure_time", "—")
         arr      = getattr(gt, "arrival_time",   "—")
         price    = getattr(gt, "price_usd", 0)
@@ -262,6 +354,7 @@ def _ground_transport_summary_html(ground_transport: list) -> str:
             f'<td style="{td}">{leg_from} → {leg_to}</td>'
             f'<td style="{td}">{mode}</td>'
             f'<td style="{td}">{operator}</td>'
+            f'<td style="{td}">{leg_date}</td>'
             f'<td style="{td}">{dep}</td>'
             f'<td style="{td}">{arr}</td>'
             f'<td style="{td}">${price:,.2f}</td>'
@@ -274,6 +367,7 @@ def _ground_transport_summary_html(ground_transport: list) -> str:
         f'<th style="{_TH_STYLE}">Route</th>'
         f'<th style="{_TH_STYLE}">Mode</th>'
         f'<th style="{_TH_STYLE}">Operator</th>'
+        f'<th style="{_TH_STYLE}">Date</th>'
         f'<th style="{_TH_STYLE}">Departs</th>'
         f'<th style="{_TH_STYLE}">Arrives</th>'
         f'<th style="{_TH_STYLE}">Price</th>'
