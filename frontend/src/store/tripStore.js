@@ -36,6 +36,8 @@ const useTripStore = create((set) => ({
   selectedFlightIds: {},
   // Per-leg ground transport selection: { "City A → City B": "optionId" }
   selectedGroundTransportIds: {},
+  // Per-city Google Places hotel selection: { "City name": "hotelName" }
+  selectedPlacesHotelIds: {},
   totalCost: 0,
   isLoading: false,
   isConfirming: false,
@@ -44,7 +46,7 @@ const useTripStore = create((set) => ({
   pendingPlanConfirm: null,
 
   setTripData: (tripData) =>
-    set({ tripData, selectedFlightIds: {}, selectedGroundTransportIds: {}, totalCost: 0 }),
+    set({ tripData, selectedFlightIds: {}, selectedGroundTransportIds: {}, selectedPlacesHotelIds: {}, totalCost: 0 }),
 
   addMessage: (role, content) =>
     set((s) => ({ messages: [...s.messages, { role, content }] })),
@@ -74,6 +76,13 @@ const useTripStore = create((set) => ({
         totalCost: calcTotal(s.tripData, newFlightIds, newGtIds),
       }
     }),
+
+  // Selecting a Google Places hotel for a city — visual selection only, does not
+  // affect totalCost (Places returns a price_level bucket, not a numeric price).
+  selectPlacesHotel: (cityKey, id) =>
+    set((s) => ({
+      selectedPlacesHotelIds: { ...s.selectedPlacesHotelIds, [cityKey]: id },
+    })),
 
   reorderCities: (fromIdx, toIdx) =>
     set((s) => {
@@ -124,6 +133,7 @@ const useTripStore = create((set) => ({
       isConfirming: false,
       selectedFlightIds: {},
       selectedGroundTransportIds: {},
+      selectedPlacesHotelIds: {},
       totalCost: 0,
     }),
 }))

@@ -60,6 +60,19 @@ export default function FlightCard({ flight, legKey, index }) {
           <p className="text-[9px]">Arrival</p>
         </div>
       </div>
+
+      {flight.aviation_stack_data && (
+        <div className="mt-2 pt-2 border-t border-[#1E1B25]">
+          <p className="text-[9px] text-[#5DCAA5] font-medium">✓ Route verified by Aviation Stack</p>
+          <p className="text-[9px] text-[#8A7A72] mt-0.5">
+            {[
+              flight.aviation_stack_data.airline_name,
+              flight.aviation_stack_data.aircraft_type,
+              flight.aviation_stack_data.status,
+            ].filter(Boolean).join(' · ')}
+          </p>
+        </div>
+      )}
     </div>
   )
 }

@@ -1,4 +1,5 @@
 import asyncio
+import re
 from datetime import date, timedelta
 from fastapi import APIRouter, HTTPException
 
@@ -6,10 +7,12 @@ from models.request_models import TripRequest
 from models.response_models import CityItinerary, TripResponse
 from services.nlp_service import extract_origin
 from services.openai_service import generate_itinerary
-from services.duffel_service import search_flights, search_hotels
+from services.duffel_service import search_flights, search_hotels, city_to_iata
 from services.supabase_service import get_user_profile, supabase
 from services.discovery_service import get_hidden_gems
 from services.ground_transport_service import get_ground_transport
+from services.google_places_service import get_hotels_from_places
+from services.aviation_stack_service import get_route_info
 from utils.city_detection import detect_cities, distribute_days, extract_country, lookup_country
 
 router = APIRouter()
@@ -67,6 +70,14 @@ async def plan_trip(request: TripRequest):
         for i in range(n)
     ]
 
+    places_hotel_tasks = [
+        get_hotels_from_places(
+            destination=city_names[i],
+            budget_per_night=(request.budget_usd / n) * 0.30 / max(day_counts[i], 1),
+        )
+        for i in range(n)
+    ]
+
     # One leg: origin→city[0], then city[0]→city[1], etc.
     flight_froms = [origin] + city_names[:-1]
     flight_tos   = city_names
@@ -87,10 +98,13 @@ async def plan_trip(request: TripRequest):
     # When confirmed_cities is absent, day_counts=None triggers the auto-distribution.
     itinerary_day_counts = day_counts if request.confirmed_cities else None
 
+    print(f"[PLAN-PLACES] About to gather places_hotel_tasks (n={len(places_hotel_tasks)}) for cities={city_names}", flush=True)
+
     try:
         gathered = await asyncio.gather(
             generate_itinerary(request, city_names, day_counts=itinerary_day_counts),
             *hotel_tasks,
+            *places_hotel_tasks,
             *flight_tasks,
             get_hidden_gems(city_names[0]),
             return_exceptions=True,
@@ -102,10 +116,12 @@ async def plan_trip(request: TripRequest):
     if isinstance(itinerary_result, Exception):
         raise HTTPException(status_code=502, detail=str(itinerary_result))
 
-    hotel_results      = gathered[1:1 + n]
-    flight_results     = gathered[1 + n:1 + 2 * n]
-    hidden_gems_raw    = gathered[1 + 2 * n]
-    hidden_gems        = hidden_gems_raw if not isinstance(hidden_gems_raw, Exception) else []
+    hotel_results         = gathered[1:1 + n]
+    places_hotel_results  = gathered[1 + n:1 + 2 * n]
+    print(f"[PLAN-PLACES] places_hotel_results after gather: {places_hotel_results}", flush=True)
+    flight_results        = gathered[1 + 2 * n:1 + 3 * n]
+    hidden_gems_raw       = gathered[1 + 3 * n]
+    hidden_gems           = hidden_gems_raw if not isinstance(hidden_gems_raw, Exception) else []
 
     # --- Slice itinerary days into per-city blocks ---
     all_days   = itinerary_result.get("days", [])
@@ -120,8 +136,9 @@ async def plan_trip(request: TripRequest):
         for j, day in enumerate(city_days):
             day["date"] = str(city_start_dates[i] + timedelta(days=j))
 
-        hotels_list = hotel_results[i] if not isinstance(hotel_results[i], Exception) else []
-        hotel       = hotels_list[0] if hotels_list else None
+        hotels_list        = hotel_results[i] if not isinstance(hotel_results[i], Exception) else []
+        hotel              = hotels_list[0] if hotels_list else None
+        places_hotels_list = places_hotel_results[i] if not isinstance(places_hotel_results[i], Exception) else []
 
         # Infer country: known for Case 3; parse from itinerary output for Cases 1/2,
         # with CITY_TO_COUNTRY as a fallback if the itinerary text doesn't carry it.
@@ -139,6 +156,7 @@ async def plan_trip(request: TripRequest):
             order_index=i,
             days=city_days,
             hotel=hotel,
+            places_hotels=places_hotels_list,
         ))
 
     # --- Ground transport for qualifying domestic legs (multi-city only) ---
@@ -189,7 +207,64 @@ async def plan_trip(request: TripRequest):
         _f.write(f"[GT-PLAN] Final ground_transport returned: {ground_transport}\n")
     print(f"[GT-PLAN] Final ground_transport returned: {ground_transport}", flush=True)
 
-    # --- Flatten flight legs: tag each offer with from/to ---
+    # --- Aviation Stack enrichment: route verification, one call per leg, quota-safe ---
+    # Aviation Stack's free tier only tracks real-time/current flights via /v1/flights, so
+    # future scheduled flights always returned None there. /v1/routes instead confirms the
+    # airline operates the origin→destination route, which works regardless of flight date.
+    # Only the first offer on each leg with a real-looking IATA airline code is enriched —
+    # Duffel's sandbox/test offers (e.g. "Duffel Airways") are skipped, and legs with no
+    # real-airline offer or unresolved IATA codes get no Aviation Stack call at all. Every
+    # result is cached (see aviation_stack_service), so the same route is never re-queried.
+    _FAKE_AIRLINE_MARKERS = ("duffel airways", "duffel", "test airways")
+    _FLIGHT_CODE_RE = re.compile(r"^([A-Z]{2,3})(\d+)$")
+
+    def _first_real_airline_offer(offers: list[dict]):
+        for offer in offers:
+            name = (offer.get("airline") or "").strip().lower()
+            if not name or any(marker in name for marker in _FAKE_AIRLINE_MARKERS):
+                continue
+            match = _FLIGHT_CODE_RE.match((offer.get("flight_number") or "").strip())
+            if not match:
+                continue
+            airline_iata = match.group(1)
+            if airline_iata == "ZZ":  # Duffel's sandbox placeholder carrier code
+                continue
+            return offer, airline_iata
+        return None
+
+    enrichment_targets: list[tuple[dict, str, str, str]] = []
+    for i, offers in enumerate(flight_results):
+        if isinstance(offers, Exception) or not offers:
+            continue
+        found = _first_real_airline_offer(offers)
+        if not found:
+            continue
+        offer, airline_iata = found
+        origin_iata = city_to_iata(flight_froms[i])
+        destination_iata = city_to_iata(flight_tos[i])
+        if not origin_iata or not destination_iata:
+            continue
+        enrichment_targets.append((offer, airline_iata, origin_iata, destination_iata))
+
+    print(f"[PLAN-AVIATION] About to gather aviation_stack route tasks (n={len(enrichment_targets)}): {[(a, o, d) for _, a, o, d in enrichment_targets]}", flush=True)
+
+    aviation_results = (
+        await asyncio.gather(
+            *[get_route_info(a_iata, o_iata, d_iata) for _, a_iata, o_iata, d_iata in enrichment_targets],
+            return_exceptions=True,
+        )
+        if enrichment_targets
+        else []
+    )
+
+    print(f"[PLAN-AVIATION] aviation_stack route gather returned: {aviation_results}", flush=True)
+
+    aviation_by_offer_id: dict[int, dict] = {}
+    for (offer, _, _, _), result in zip(enrichment_targets, aviation_results):
+        if result and not isinstance(result, Exception):
+            aviation_by_offer_id[id(offer)] = result
+
+    # --- Flatten flight legs: tag each offer with from/to (+ Aviation Stack data if any) ---
     flat_flights: list[dict] = []
     for i, offers in enumerate(flight_results):
         if isinstance(offers, Exception) or not offers:
@@ -200,7 +275,12 @@ async def plan_trip(request: TripRequest):
             })
             continue
         for offer in offers:
-            flat_flights.append({"from": flight_froms[i], "to": flight_tos[i], **offer})
+            flat_flights.append({
+                "from": flight_froms[i],
+                "to": flight_tos[i],
+                **offer,
+                "aviation_stack_data": aviation_by_offer_id.get(id(offer)),
+            })
 
     trip_response = TripResponse(
         summary=itinerary_result.get("summary", ""),

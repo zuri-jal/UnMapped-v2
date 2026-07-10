@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import useTripStore from '../store/tripStore'
 import ItineraryTab from './ItineraryTab'
 import FlightCard   from './FlightCard'
-import HotelCard    from './HotelCard'
+import HotelCard, { PlacesHotelCard } from './HotelCard'
 import BudgetTab    from './BudgetTab'
 import TransportTab from './TransportTab'
 
@@ -97,10 +97,24 @@ export default function RightPanel() {
                     </span>
                     <div className="h-px flex-1 bg-[#1E1B25]" />
                   </div>
+                  <p className="text-[9px] font-semibold text-[#5DCAA5] uppercase tracking-wider mb-1">
+                    AI Recommended
+                  </p>
                   {city.hotel ? (
                     <HotelCard hotel={city.hotel} cityName={city.name} index={ci} />
                   ) : (
                     <p className="text-[10px] text-[#8A7A72]">No hotel found for {city.name}.</p>
+                  )}
+
+                  {city.places_hotels?.length > 0 && (
+                    <div className="mt-3">
+                      <p className="text-[9px] font-semibold text-[#5DCAA5] uppercase tracking-wider mb-1">
+                        Verified Hotels Nearby
+                      </p>
+                      {city.places_hotels.map((h, hi) => (
+                        <PlacesHotelCard key={h.name ?? hi} hotel={h} cityKey={city.name} index={hi} />
+                      ))}
+                    </div>
                   )}
                 </div>
               ))

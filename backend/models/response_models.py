@@ -41,6 +41,7 @@ class CityItinerary(BaseModel):
     order_index: int
     days: List[DayItinerary]
     hotel: Optional[Any] = None
+    places_hotels: List[Any] = []
 
 
 class GroundTransportOption(BaseModel):
