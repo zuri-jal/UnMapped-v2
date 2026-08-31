@@ -63,14 +63,14 @@ export default function Plan() {
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
-    <div className="flex h-screen overflow-hidden bg-[#0A0A0F]">
-      <div className="w-60 shrink-0 border-r border-[#1E1B25] flex flex-col overflow-hidden">
+    <div className="flex h-screen overflow-hidden bg-plan-bg-base">
+      <div className="w-[300px] shrink-0 border-r border-plan-border-subtle flex flex-col overflow-hidden shadow-xl z-10">
         <ChatPanel />
       </div>
-      <div className="flex-1 flex flex-col overflow-hidden min-w-0">
+      <div className="flex-1 flex flex-col overflow-hidden min-w-0 relative z-0">
         <CenterPanel />
       </div>
-      <div className="w-[220px] shrink-0 border-l border-[#1E1B25] flex flex-col overflow-hidden">
+      <div className="w-[320px] shrink-0 border-l border-plan-border-subtle flex flex-col overflow-hidden shadow-xl z-10">
         <RightPanel />
       </div>
     </div>

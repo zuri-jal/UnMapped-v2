@@ -14,7 +14,7 @@ function launchConfetti() {
 
 export default function Confirm() {
   const navigate = useNavigate()
-  const { tripData, selectedFlightIds, selectedGroundTransportIds, reset } = useTripStore()
+  const { tripData, selectedFlightIds, selectedGroundTransportIds, selectedPlacesHotelIds, reset } = useTripStore()
 
   const [passengerName, setPassengerName] = useState('')
   const [passengerEmail, setPassengerEmail] = useState('')
@@ -43,6 +43,31 @@ export default function Confirm() {
 
   const cities  = tripData?.cities  ?? []
   const flights = tripData?.flights ?? []
+
+  // Per-city hotel resolution: a selected Google Places pick wins over the AI
+  // recommendation. Places results have no numeric nightly rate (only a
+  // price_level bucket), so they're booked externally at $0 through us.
+  const resolvedHotels = cities.map((city) => {
+    const placesId = selectedPlacesHotelIds?.[city.name]
+    const placesHotel = placesId
+      ? (city.places_hotels ?? []).find((h, hi) => (h.name || `places-hotel-${hi}`) === placesId)
+      : null
+
+    if (placesHotel) {
+      return {
+        city,
+        source: 'places',
+        hotel: {
+          name: placesHotel.name,
+          location: placesHotel.address ?? city.name,
+          price_per_night_usd: 0,
+          stars: null,
+        },
+      }
+    }
+
+    return city.hotel ? { city, source: 'ai', hotel: city.hotel } : null
+  }).filter(Boolean)
 
   // Build ground transport lookup by legKey
   const gtByLegKey = {}
@@ -88,7 +113,7 @@ export default function Confirm() {
   const gtTotal       = transportPerLeg
     .filter((t) => t.type !== 'flight' && t.type !== null && t.item)
     .reduce((s, { item }) => s + Number(item.price_usd ?? 0), 0)
-  const hotelTotal    = cities.reduce((s, c) => s + Number(c.hotel?.price_per_night_usd ?? 0) * (c.day_count ?? 0), 0)
+  const hotelTotal    = resolvedHotels.reduce((s, { hotel, city }) => s + Number(hotel.price_per_night_usd ?? 0) * (city.day_count ?? 0), 0)
   const grandTotal    = flightTotal + gtTotal + hotelTotal
 
   // Derive date range from city day arrays
@@ -139,14 +164,17 @@ export default function Confirm() {
             price_usd:      Number(item.price_usd ?? 0),
           }
         }),
-      selected_hotels: cities.filter((c) => c.hotel).map((city) => ({
-        name:                city.hotel.name,
-        stars:               city.hotel.stars ?? null,
-        price_per_night_usd: Number(city.hotel.price_per_night_usd ?? 0),
-        total_price_usd:     Number(city.hotel.price_per_night_usd ?? 0) * (city.day_count ?? 0),
-        location:            city.hotel.location ?? city.name,
+      selected_hotels: resolvedHotels.map(({ city, hotel, source }) => ({
+        name:                hotel.name,
+        stars:               hotel.stars ?? null,
+        price_per_night_usd: Number(hotel.price_per_night_usd ?? 0),
+        total_price_usd:     Number(hotel.price_per_night_usd ?? 0) * (city.day_count ?? 0),
+        location:            hotel.location ?? city.name,
         check_in:            null,
         check_out:           null,
+        why_recommended:     source === 'places'
+          ? 'External booking — verified via Google Places, not booked through UnMapped.'
+          : (hotel.why_recommended ?? null),
       })),
       total_cost:      grandTotal,
       passenger_name:  passengerName,
@@ -267,21 +295,28 @@ export default function Confirm() {
         {/* Hotels — one section per city */}
         <div className="bg-[#0F0D12] border border-[#1E1B25] rounded-2xl p-5 mb-4">
           <h3 className="text-xs font-semibold text-[#8A7A72] uppercase tracking-wider mb-3">Hotels</h3>
-          {cities.filter((c) => c.hotel).length ? (
-            cities.filter((c) => c.hotel).map((city, i) => (
+          {resolvedHotels.length ? (
+            resolvedHotels.map(({ city, hotel, source }, i) => (
               <div key={i} className="mb-4 last:mb-0">
                 <p className="text-[9px] font-semibold text-[#5DCAA5] uppercase tracking-wider mb-1.5">
                   🏨 {city.name}{city.country ? `, ${city.country}` : ''}
+                  {source === 'places' && (
+                    <span className="ml-1.5 text-[#8A7A72] normal-case tracking-normal">· via Google Places</span>
+                  )}
                 </p>
                 <div className="space-y-1.5 text-sm">
-                  <Row label="Hotel"    value={city.hotel.name} />
-                  <Row label="Location" value={city.hotel.location ?? city.name} />
+                  <Row label="Hotel"    value={hotel.name} />
+                  <Row label="Location" value={hotel.location ?? city.name} />
                   <Row label="Nights"   value={String(city.day_count ?? 0)} />
-                  <Row
-                    label="Total"
-                    value={`$${(Number(city.hotel.price_per_night_usd ?? 0) * (city.day_count ?? 0)).toLocaleString()}`}
-                    highlight
-                  />
+                  {source === 'places' ? (
+                    <Row label="Total" value="External booking · $0 through us" highlight />
+                  ) : (
+                    <Row
+                      label="Total"
+                      value={`$${(Number(hotel.price_per_night_usd ?? 0) * (city.day_count ?? 0)).toLocaleString()}`}
+                      highlight
+                    />
+                  )}
                 </div>
               </div>
             ))

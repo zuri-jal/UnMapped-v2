@@ -72,13 +72,8 @@ export default function Auth() {
       <div className="flex-1 flex flex-col justify-center px-8 md:px-16 py-12 max-w-lg mx-auto w-full">
 
         {/* Logo */}
-        <div className="mb-10">
-          <span
-            className="text-xl font-bold text-rose-gold cursor-pointer"
-            onClick={() => navigate('/')}
-          >
-            Unmapped
-          </span>
+        <div className="mb-10 flex items-center gap-2 cursor-pointer select-none" onClick={() => navigate('/')}>
+          <img src="/logo.png" alt="Unmapped Logo" className="h-10 object-contain" />
         </div>
 
         <h1 className="text-3xl font-bold text-[#F0ECE8] mb-2">Start your journey</h1>

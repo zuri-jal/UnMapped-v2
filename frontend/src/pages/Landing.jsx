@@ -65,9 +65,9 @@ export default function Landing() {
 
         {/* Nav */}
         <nav className="relative z-10 flex items-center justify-between px-8 py-5">
-          <span className="text-xl font-bold text-rose-gold tracking-tight select-none">
-            Unmapped
-          </span>
+          <div className="flex items-center gap-2 select-none cursor-pointer" onClick={() => navigate('/')}>
+            <img src="/logo.png" alt="Unmapped Logo" className="h-10 object-contain" />
+          </div>
           <div className="hidden md:flex items-center gap-8 text-sm text-[#8A7A72]">
             <a href="#why-unmapped" onClick={handleSeeHow} className="hover:text-[#F0ECE8] transition-colors">
               Features

@@ -7,7 +7,7 @@ import HotelCard, { PlacesHotelCard } from './HotelCard'
 import BudgetTab    from './BudgetTab'
 import TransportTab from './TransportTab'
 
-const TABS = ['Itinerary', 'Flights', 'Hotels', 'Ground Transport', 'Budget']
+const TABS = ['Itinerary', 'Flights', 'Hotels', 'Transport', 'Budget']
 
 export default function RightPanel() {
   const navigate = useNavigate()
@@ -35,18 +35,18 @@ export default function RightPanel() {
   const totalDisplay = totalCost > 0 ? totalCost.toLocaleString() : '—'
 
   return (
-    <div className="flex flex-col h-full bg-[#0A0A0F]">
+    <div className="flex flex-col h-full bg-plan-bg-base">
 
       {/* Tab bar */}
-      <div className="flex border-b border-[#1E1B25] shrink-0">
+      <div className="flex border-b border-plan-border-subtle shrink-0 overflow-x-auto plan-scroll whitespace-nowrap px-2">
         {TABS.map((t) => (
           <button
             key={t}
             onClick={() => setActive(t)}
-            className={`flex-1 py-2.5 text-[10px] font-medium transition-colors border-b-2 ${
+            className={`px-4 py-3 text-[11px] font-semibold transition-all border-b-2 ${
               active === t
-                ? 'border-rose-gold text-rose-gold'
-                : 'border-transparent text-[#8A7A72] hover:text-[#F0ECE8]'
+                ? 'border-plan-primary text-plan-primary'
+                : 'border-transparent text-plan-text-secondary hover:text-plan-text-primary'
             }`}
           >
             {t}
@@ -55,7 +55,7 @@ export default function RightPanel() {
       </div>
 
       {/* Tab content */}
-      <div className="flex-1 overflow-y-auto px-3 py-3 min-h-0">
+      <div className="flex-1 overflow-y-auto plan-scroll px-3 py-4 min-h-0">
         {active === 'Itinerary' && <ItineraryTab />}
 
         {active === 'Flights' && (
@@ -63,11 +63,11 @@ export default function RightPanel() {
             {flightLegs.length ? (
               flightLegs.map(([legKey, legFlights]) => (
                 <div key={legKey}>
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className="text-[9px] font-semibold text-[#8A7A72] uppercase tracking-wider whitespace-nowrap">
+                  <div className="flex items-center gap-2 mb-3">
+                    <span className="text-[10px] font-bold text-plan-text-secondary uppercase tracking-wider whitespace-nowrap">
                       ✈ {legKey}
                     </span>
-                    <div className="h-px flex-1 bg-[#1E1B25]" />
+                    <div className="h-px flex-1 bg-plan-border-subtle" />
                   </div>
                   {legFlights.map((f, i) => (
                     <FlightCard key={f.flight_number ?? f.offer_id ?? i} flight={f} legKey={legKey} index={i} />
@@ -75,10 +75,14 @@ export default function RightPanel() {
                 </div>
               ))
             ) : (
-              <div className="text-center text-[#8A7A72] py-10">
-                <div className="text-3xl mb-2">✈</div>
-                <p className="text-xs font-medium text-[#F0ECE8]">No flights available</p>
-                <p className="text-[10px] mt-1">
+              <div className="flex flex-col items-center justify-center text-center py-16 px-4">
+                <div className="w-16 h-16 rounded-full bg-plan-surface-2 flex items-center justify-center mb-4 border border-plan-border-subtle shadow-inner">
+                  <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" className="text-plan-primary" strokeWidth="1.5">
+                    <path d="M22 2 11 13M22 2l-7 20-4-9-9-4 20-7z"/>
+                  </svg>
+                </div>
+                <p className="text-sm font-semibold text-plan-text-primary">No flights available</p>
+                <p className="text-[11px] text-plan-text-secondary mt-1">
                   {tripData ? 'No flight results were returned for this route.' : 'Plan a trip to see flight options.'}
                 </p>
               </div>
@@ -91,24 +95,26 @@ export default function RightPanel() {
             {cities.length ? (
               cities.map((city, ci) => (
                 <div key={ci}>
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className="text-[9px] font-semibold text-[#8A7A72] uppercase tracking-wider whitespace-nowrap">
+                  <div className="flex items-center gap-2 mb-3">
+                    <span className="text-[10px] font-bold text-plan-text-secondary uppercase tracking-wider whitespace-nowrap">
                       {city.name}{city.country ? `, ${city.country}` : ''}
                     </span>
-                    <div className="h-px flex-1 bg-[#1E1B25]" />
+                    <div className="h-px flex-1 bg-plan-border-subtle" />
                   </div>
-                  <p className="text-[9px] font-semibold text-[#5DCAA5] uppercase tracking-wider mb-1">
+                  <p className="text-[10px] font-bold text-plan-success uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M5 12l5 5L20 7"/></svg>
                     AI Recommended
                   </p>
                   {city.hotel ? (
                     <HotelCard hotel={city.hotel} cityName={city.name} index={ci} />
                   ) : (
-                    <p className="text-[10px] text-[#8A7A72]">No hotel found for {city.name}.</p>
+                    <p className="text-[11px] text-plan-text-muted">No hotel found for {city.name}.</p>
                   )}
 
                   {city.places_hotels?.length > 0 && (
-                    <div className="mt-3">
-                      <p className="text-[9px] font-semibold text-[#5DCAA5] uppercase tracking-wider mb-1">
+                    <div className="mt-4">
+                      <p className="text-[10px] font-bold text-plan-success/80 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/></svg>
                         Verified Hotels Nearby
                       </p>
                       {city.places_hotels.map((h, hi) => (
@@ -119,10 +125,14 @@ export default function RightPanel() {
                 </div>
               ))
             ) : (
-              <div className="text-center text-[#8A7A72] py-10">
-                <div className="text-3xl mb-2">🏨</div>
-                <p className="text-xs font-medium text-[#F0ECE8]">No hotels available</p>
-                <p className="text-[10px] mt-1">
+              <div className="flex flex-col items-center justify-center text-center py-16 px-4">
+                <div className="w-16 h-16 rounded-full bg-plan-surface-2 flex items-center justify-center mb-4 border border-plan-border-subtle shadow-inner">
+                  <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" className="text-plan-primary" strokeWidth="1.5">
+                    <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>
+                  </svg>
+                </div>
+                <p className="text-sm font-semibold text-plan-text-primary">No hotels available</p>
+                <p className="text-[11px] text-plan-text-secondary mt-1">
                   {tripData ? 'No hotel results were returned.' : 'Plan a trip to see hotel options.'}
                 </p>
               </div>
@@ -130,19 +140,19 @@ export default function RightPanel() {
           </div>
         )}
 
-        {active === 'Ground Transport' && <TransportTab />}
+        {active === 'Transport' && <TransportTab />}
         {active === 'Budget' && <BudgetTab />}
       </div>
 
       {/* Confirm button — pinned to bottom */}
-      <div className="px-3 pb-3 pt-2 border-t border-[#1E1B25] shrink-0">
+      <div className="px-3 pb-4 pt-3 border-t border-plan-border-subtle bg-plan-surface-1 shrink-0 z-10 shadow-[0_-8px_15px_rgba(0,0,0,0.2)]">
         <button
           disabled={!canConfirm}
           onClick={() => navigate('/confirm')}
-          className={`w-full py-2.5 rounded-xl text-xs font-semibold transition-all ${
+          className={`w-full py-3 rounded-xl text-xs font-semibold transition-all shadow-md ${
             canConfirm
-              ? 'bg-rose-gold text-white hover:bg-rose-gold-dark'
-              : 'bg-[#1E1B25] text-[#8A7A72] cursor-not-allowed'
+              ? 'bg-gradient-to-r from-plan-primary to-plan-primary-hover text-plan-bg-base hover:shadow-lg hover:-translate-y-[1px]'
+              : 'bg-plan-surface-2 border border-plan-border-subtle text-plan-text-muted cursor-not-allowed shadow-none'
           }`}
         >
           {canConfirm

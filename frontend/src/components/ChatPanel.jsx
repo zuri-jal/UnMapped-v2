@@ -95,23 +95,24 @@ export default function ChatPanel() {
   }
 
   return (
-    <div className="flex flex-col h-full bg-[#0A0A0F]">
+    <div className="flex flex-col h-full bg-gradient-to-b from-plan-surface-1 to-plan-bg-base">
 
       {/* Header */}
-      <div className="px-4 py-4 border-b border-[#1E1B25] shrink-0">
+      <div className="px-4 py-4 border-b border-plan-border-subtle shrink-0">
         <div className="flex items-center gap-2">
-          <span className="text-sm font-semibold text-[#F0ECE8]">AI travel assistant</span>
-          <span className="w-2 h-2 rounded-full bg-[#5DCAA5] shrink-0" />
+          <img src="/logo.png" alt="Unmapped Logo" className="w-6 h-6 object-contain" />
+          <span className="text-sm font-semibold text-plan-text-primary">AI travel assistant</span>
+          <span className="w-2 h-2 rounded-full bg-plan-success shrink-0 shadow-[0_0_8px_#4ECDC4]" />
         </div>
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto px-3 py-3 space-y-2.5 min-h-0">
+      <div className="flex-1 overflow-y-auto plan-scroll px-3 py-3 space-y-3 min-h-0">
         {messages.length === 0 && !isLoading && (
-          <div className="text-center text-[#8A7A72] mt-8 px-2">
+          <div className="text-center text-plan-text-secondary mt-8 px-2">
             <div className="text-3xl mb-3">🗺️</div>
-            <p className="text-xs font-medium text-[#F0ECE8]">Where to next?</p>
-            <p className="text-xs mt-1 leading-relaxed">
+            <p className="text-xs font-medium text-plan-text-primary">Where to next?</p>
+            <p className="text-xs mt-1 leading-relaxed text-plan-text-muted">
               Describe your dream trip and I'll handle flights, hotels and every detail.
             </p>
           </div>
@@ -120,10 +121,10 @@ export default function ChatPanel() {
         {messages.map((m, i) => (
           <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
             <div
-              className={`max-w-[90%] text-xs leading-relaxed rounded-2xl px-3 py-2 ${
+              className={`max-w-[90%] text-xs leading-relaxed rounded-2xl px-3 py-2.5 shadow-sm ${
                 m.role === 'user'
-                  ? 'bg-rose-gold/90 text-white rounded-br-sm'
-                  : 'bg-[#0F0D12] border border-[#1E1B25] text-[#F0ECE8] rounded-bl-sm'
+                  ? 'bg-[#1A1020] border-l-2 border-plan-primary text-plan-text-primary rounded-br-sm'
+                  : 'glass-card text-plan-text-primary rounded-bl-sm'
               }`}
             >
               {m.content}
@@ -132,45 +133,50 @@ export default function ChatPanel() {
         ))}
 
         {pendingConfirm && !isLoading && (
-          <div className="flex justify-start">
-            <div className="bg-[#0F0D12] border border-rose-gold/30 rounded-2xl rounded-bl-sm px-3 py-3 max-w-[90%] w-full">
-              <p className="text-[10px] text-[#8A7A72] mb-2.5">When do you want to go?</p>
-              <div className="space-y-2 mb-3">
-                <div>
-                  <label className="block text-[9px] text-[#8A7A72] mb-1">Start date</label>
-                  <input
-                    type="date"
-                    value={departDate}
-                    min={new Date().toISOString().split('T')[0]}
-                    onChange={(e) => setDepartDate(e.target.value)}
-                    className="input-dark !py-1.5 !px-3 text-xs"
-                  />
-                </div>
-                <div>
-                  <label className="block text-[9px] text-[#8A7A72] mb-1">Duration (days)</label>
-                  <input
-                    type="number"
-                    value={durationDays}
-                    min={1}
-                    max={30}
-                    onChange={(e) => setDurationDays(Math.max(1, Math.min(30, parseInt(e.target.value) || 1)))}
-                    className="input-dark !py-1.5 !px-3 text-xs"
-                  />
-                </div>
+          <div className="flex justify-start w-full my-2">
+            <div className="bg-plan-surface-2 border border-plan-border-subtle shadow-lg shadow-black/50 rounded-2xl rounded-bl-sm w-full max-w-[95%] overflow-hidden">
+              <div className="bg-gradient-to-r from-plan-primary to-plan-primary-hover px-3 py-2">
+                <span className="text-[10px] font-semibold text-plan-bg-base uppercase tracking-wider">Trip Details</span>
               </div>
-              <button
-                onClick={confirmAndPlan}
-                className="w-full bg-rose-gold text-white text-[10px] font-semibold py-1.5 rounded-lg hover:bg-rose-gold-dark transition-colors"
-              >
-                Looks good, plan my trip
-              </button>
+              <div className="p-3">
+                <p className="text-[10px] text-plan-text-secondary mb-3">When do you want to go?</p>
+                <div className="space-y-3 mb-4">
+                  <div>
+                    <label className="block text-[9px] text-plan-text-muted mb-1 uppercase tracking-wide">Start date</label>
+                    <input
+                      type="date"
+                      value={departDate}
+                      min={new Date().toISOString().split('T')[0]}
+                      onChange={(e) => setDepartDate(e.target.value)}
+                      className="input-dark !py-2 !px-3 text-xs w-full"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[9px] text-plan-text-muted mb-1 uppercase tracking-wide">Duration (days)</label>
+                    <input
+                      type="number"
+                      value={durationDays}
+                      min={1}
+                      max={30}
+                      onChange={(e) => setDurationDays(Math.max(1, Math.min(30, parseInt(e.target.value) || 1)))}
+                      className="input-dark !py-2 !px-3 text-xs w-full"
+                    />
+                  </div>
+                </div>
+                <button
+                  onClick={confirmAndPlan}
+                  className="w-full bg-plan-primary text-plan-bg-base text-[11px] font-semibold py-2.5 rounded-xl hover:bg-plan-primary-hover hover-lift transition-all"
+                >
+                  Looks good, plan my trip &rarr;
+                </button>
+              </div>
             </div>
           </div>
         )}
 
         {isLoading && (
           <div className="flex justify-start">
-            <div className="bg-[#0F0D12] border border-[#1E1B25] rounded-2xl rounded-bl-sm px-3 py-2 text-xs text-[#8A7A72] animate-pulse">
+            <div className="glass-card rounded-2xl rounded-bl-sm px-3 py-2 text-xs text-plan-text-secondary animate-pulse">
               {loadingText}
             </div>
           </div>
@@ -179,22 +185,22 @@ export default function ChatPanel() {
       </div>
 
       {/* Input */}
-      <div className="px-3 pb-3 pt-2 border-t border-[#1E1B25] shrink-0">
-        <div className="flex gap-2 items-end">
+      <div className="px-4 pb-5 pt-4 bg-plan-surface-2 border-t border-plan-border-accent shrink-0 shadow-[0_-10px_20px_rgba(0,0,0,0.2)] relative z-10">
+        <div className="flex gap-3 items-end">
           <textarea
             rows={1}
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKey}
             placeholder={tripData ? 'Ask me to change anything…' : 'Where do you want to go?'}
-            className="flex-1 input-dark text-xs py-2 resize-none leading-relaxed"
+            className="flex-1 input-dark bg-plan-surface-1 text-sm py-3 px-4 resize-none leading-relaxed shadow-inner"
           />
           <button
             onClick={() => sendMessage()}
             disabled={!input.trim() || isLoading || !!pendingConfirm}
-            className="shrink-0 w-8 h-8 flex items-center justify-center bg-rose-gold rounded-lg disabled:opacity-40 hover:bg-rose-gold-dark transition-colors"
+            className="shrink-0 w-12 h-12 flex items-center justify-center bg-plan-primary rounded-xl disabled:opacity-40 hover:bg-plan-primary-hover transition-colors shadow-md"
           >
-            <svg width="14" height="14" fill="none" stroke="white" strokeWidth="2.5" viewBox="0 0 24 24">
+            <svg width="16" height="16" fill="none" stroke="currentColor" className="text-plan-bg-base" strokeWidth="2.5" viewBox="0 0 24 24">
               <line x1="22" y1="2" x2="11" y2="13" />
               <polygon points="22 2 15 22 11 13 2 9 22 2" />
             </svg>
